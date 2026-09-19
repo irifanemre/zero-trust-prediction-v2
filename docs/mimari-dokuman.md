@@ -925,6 +925,9 @@ Bir tespit sisteminin neyi kapsamadığını açıkça belirtmesi, kapsadığın
 | Düşük hacimli sürekli sızıntı | Günde tek dosya, aylarca — istatistiksel olarak gürültüden ayrışmaz |
 | Fiziksel kanallar | Kağıt, fotoğraf, sözlü aktarım kapsam dışıdır |
 | Kapsam dışı kaynaklar | İlgili log kaynağı mevcut değilse o tespit çalışmaz (bkz. Ek A) |
+| **Kurbanın kendi bağlamından çalışan saldırgan** *(1.2)* | Saldırgan kurbanın kendi cihazından, mesai saatinde ve aynı ülkeden çalışırsa erişim deseni sinyalleri (#4 imkânsız seyahat, #5 yeni cihaz/konum, #1 mesai dışı) hiç tetiklenmez. Geriye yalnızca hacim ve dosya sinyalleri (#3, #7) kalır; bunlar da kişisel baseline'a dayandığı için saldırganın kurbanın kendi normaline yakın kalması hâlinde zayıflar. Endpoint'e yerleşmiş sabırlı saldırgan ve kötü niyetli meşru çalışan bu boşluktadır |
+
+> **1.2 notu — akran oranının veto yetkisi kaldırıldı.** Bu sınır 1.1'de daha genişti: #3 ve #7 kuralları `akran_kati > 5.0` koşulunu **VE** ile taşıdığı için, akran medyanı yüksek olan veri yoğun departmanlarda (finans, ArGe) kişisel olarak uç bir sapma bile veto ediliyordu — ele geçirilmiş hesap, departman medyanının 5 katının altında kalarak görünmez olabiliyordu. Akran oranı şiddet ölçekleyicisine dönüştürüldü (UEBA-0005 deseni): kişisel z tek başına tetikler, akran oranı yalnızca sıradaki önceliği belirler. Ayrıca 2.3'te söz verilip yalnızca dosya/USB için uygulanmış olan 7 günlük kümülatif pencere veri hacmine de eklendi ve kritik varlığa erişimde akran indirimi uygulanmaz. Ayrıntı ve ölçüm: `docs/bulgular.md → Bulgu 1`.
 
 > **1.1 notu.** CERT'te ölçülen sınırlar: S2'nin 17 senaryosundan 6'sının USB fazı 90 günlük pencerenin dışındaydı (kısmi pencere olarak işaretlenir, "kaçırıldı" sayılmaz); S3'ün 1'i tetiklendi ama bütçe dışı kaldı (kritik istisnaya girmedi). İK sinyali gerektiren #11/13/14 CERT'te sınanamadı.
 

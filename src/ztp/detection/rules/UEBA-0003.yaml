@@ -1,6 +1,6 @@
 id: UEBA-0003
 ad: Anormal veri çıkış hacmi
-surum: '1.0'
+surum: '1.1'
 durum: yayinda
 katman: UEBA
 attack:
@@ -11,28 +11,51 @@ veri_kaynaklari:
 mantik:
   pencere: 1d
   kosullar:
-  - veri_hacmi_z > 3.5
-  - veri_hacmi_akran_kati > 5.0
+  - veri_hacmi_anomali_z > 3.5
 siddet:
-  sinyal: veri_hacmi_z
+  sinyal: veri_hacmi_anomali_z
   esik: 3.5
   olcek: 2.0
+  akran_olcekleyici: veri_hacmi_akran_kati
+  olcekleyici_taban_sinyali: kritik_varlik_erisim_sayisi
 agirlik: 8
 bastirma:
 - servis_hesaplari
+- izin_donusu
 sahip: guvenlik-operasyon
 runbook: RB-UEBA-0003
+rapor_sinyalleri:
+- veri_hacmi_z
+- veri_hacmi_7g_z
+- veri_hacmi_7g_toplam
 kanit:
 - bytes
 test_senaryolari:
 - ad: 14GB_indirme
   beklenen: true
   sinyaller:
-    veri_hacmi_z: 9.0
+    veri_hacmi_anomali_z: 9.0
     veri_hacmi_akran_kati: 40
-- ad: ay_sonu_ekiple_birlikte
+- ad: akran_tavani_altinda_veri_yogun_departman
+  beklenen: true
+  sinyaller:
+    veri_hacmi_anomali_z: 9.0
+    veri_hacmi_akran_kati: 4.5
+- ad: gunluk_esik_alti_haftalik_birikim
+  beklenen: true
+  sinyaller:
+    veri_hacmi_z: 2.0
+    veri_hacmi_7g_z: 4.2
+    veri_hacmi_anomali_z: 4.2
+    veri_hacmi_akran_kati: 3.0
+- ad: ay_sonu_ekiple_birlikte_normal_gun
   beklenen: false
   sinyaller:
-    veri_hacmi_z: 4.0
+    veri_hacmi_anomali_z: 1.2
     veri_hacmi_akran_kati: 1.3
-notlar: ''
+notlar: '1.1: akran oranı VE koşulundan çıkarıldı, şiddet ölçekleyicisine dönüştürüldü (UEBA-0005 deseni).
+  Gerekçe: akran medyanı yüksek olan veri yoğun departmanlarda (finans) oran tavanı, kişisel olarak
+  uç bir sapmayı veto ediyordu — ele geçirilmiş hesap akran medyanının 5 katının altında kalarak
+  görünmez oluyordu. Akranla aynı davranan kullanıcı artık elenmez, şiddeti düşer ve sıralamada
+  geriye gider (13.5). Ayrıca 2.3 "eşik altı kalma" için 7 günlük kümülatif pencere eklendi
+  (veri_hacmi_anomali_z = max(günlük z, 7g z)). Kritik varlığa erişim varsa akran indirimi uygulanmaz.'

@@ -371,6 +371,40 @@ class ProfileEngine:
             if files7 > 0
             else 1.0
         )
+        # 9.3 / 17.2 devamsızlık takvimi: kayıtlı izin dönüşü UEBA katmanında da bilinmelidir.
+        # `izin_kayitli` Prediction katmanında üretiliyor ve UEBA ondan ÖNCE çalışıyor (pipeline); 12.5
+        # bastırması için aynı hesap burada yapılır. Bastırılan olay sayılır ve raporlanır — sessizce yutulmaz.
+        s["izin_donusu"] = 0
+        _last = ctx.last_active.get(sid)
+        if _last is not None and _last < day and len(self.leaves):
+            _gap = int((day - _last).days) - 1
+            if _gap >= 7:
+                _lv = self.leaves[self.leaves["sid"] == sid]
+                s["izin_donusu"] = int(any((r.start <= day - DAY) and (r.end >= _last + DAY) for r in _lv.itertuples()))
+        # 2.3 "eşik altı kalma" — veri hacmi için 7 günlük kümülatif pencere (dosya/USB ile aynı kalıp).
+        # 12.4 bulgusu: dokümanda söz verilmişti, yalnızca dosya ve USB için uygulanmıştı; hacimde yoktu.
+        bytes7 = float(row["bytes_out"]) + (float(prev6["bytes_out"]) if prev6 is not None else 0.0)
+        s["veri_hacmi_7g_toplam"] = bytes7
+        # bağımsız günlerin toplamında ölçek ~√7 kat büyür; beklenen 7 × günlük beklenen
+        # Ölçek: bağımsız günlerin toplamında ~√7 kat büyür. Göreli taban (%10) GÜNLÜK değil HAFTALIK
+        # beklenen üzerinden uygulanır; aksi hâlde taban %10 → %3,8'e düşer ve ılımlı bir yükseliş z'yi patlatır.
+        s["veri_hacmi_7g_z"] = (
+            robust_z(
+                bytes7,
+                7.0 * exp_b,
+                math.sqrt(7.0) * sc_b,
+                max(math.sqrt(7.0) * FEATURE_FLOOR["bytes_out"], 0.1 * abs(7.0 * exp_b)),
+            )
+            if not math.isnan(exp_b)
+            else float("nan")
+        )
+        # usb_anomali_p ile aynı idiom: günlük pencere ile kümülatif pencereden hangisi daha güçlüyse o
+        _zc = [z for z in (s["veri_hacmi_z"], s["veri_hacmi_7g_z"]) if not (isinstance(z, float) and math.isnan(z))]
+        s["veri_hacmi_anomali_z"] = max(_zc) if _zc else float("nan")
+        # 12.4 mutlak taban: kritik varlığa erişim varsa şiddette akran indirimi uygulanmaz
+        s["kritik_varlik_erisim_sayisi"] = int(row.get("sensitive_access_count", 0) or 0)
+        if not math.isnan(exp_b):
+            ex["veri_hacmi_7g_mb"] = f"{bytes7 / 1e6:,.0f} MB (7g beklenen ~{7 * exp_b / 1e6:,.0f} MB)"
         ex["usb_7g"] = f"{usb7} (beklenen ~{7 * (exp_usb if not math.isnan(exp_usb) else 0.1):.1f})"
         exp_fail, _, _ = blended("failed_logon_count")
         k_fail = int(row["failed_logon_count"])

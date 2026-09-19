@@ -18,6 +18,31 @@ from ztp.stats import EPS, sigmoid
 
 LOG = logging.getLogger(__name__)
 
+# 12.4 akran vetosu bulgusu: akran oranı VE koşulu (veto) değil, şiddet ölçekleyicisidir (UEBA-0005 deseni).
+# Nötr nokta eski VE-koşulu eşiğidir: oran 5× iken çarpan 1.0. Akranıyla aynı davranan kullanıcı artık
+# elenmez, yalnızca şiddeti — dolayısıyla kuyruktaki önceliği — düşer (13.5 sıralama tabanlıdır).
+PEER_NEUTRAL_RATIO = 5.0
+PEER_FACTOR_MIN, PEER_FACTOR_MAX = 0.2, 2.0
+
+
+def _as_float(v) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return float("nan")
+    return f
+
+
+def peer_severity_factor(ratio, absolute_floor: bool = False) -> float:
+    """Akran oranından şiddet çarpanı. `absolute_floor` (kritik varlık erişimi) varsa akran indirimi
+    uygulanmaz — taban 1.0; bordro dosyası yemekhane menüsüyle aynı ağırlıkta kalmasın (12.4)."""
+    r = _as_float(ratio)
+    if math.isnan(r):
+        return 1.0
+    f = math.log10(max(r, 0.1)) / math.log10(PEER_NEUTRAL_RATIO)
+    f = min(max(f, PEER_FACTOR_MIN), PEER_FACTOR_MAX)
+    return max(f, 1.0) if absolute_floor else f
+
 
 @dataclass
 class Hit:
@@ -67,7 +92,8 @@ class DetectionEngine:
 
     @staticmethod
     def severity(rule: dict, s: dict) -> float:
-        """13.2 Şiddet: sapmanın büyüklüğü sigmoid ile 0–1'e sıkıştırılır (ham z kullanılmaz; tek uç değer domine etmesin)."""
+        """13.2 Şiddet: sapmanın büyüklüğü sigmoid ile 0–1'e sıkıştırılır (ham z kullanılmaz; tek uç değer domine etmesin).
+        `akran_olcekleyici` verilmişse akran oranı şiddeti ölçekler — tetiklemez (12.4 akran vetosu bulgusu)."""
         sd = rule["siddet"]
         v = s.get(sd["sinyal"], float("nan"))
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -75,12 +101,20 @@ class DetectionEngine:
         esik = sd["esik"]
         if sd.get("donusum") == "log10":
             v, esik = -math.log10(max(float(v), 1e-300)), -math.log10(esik)
+        scaler = sd.get("akran_olcekleyici")
+        if scaler:
+            taban_sinyali = sd.get("olcekleyici_taban_sinyali")
+            taban = _as_float(s.get(taban_sinyali)) >= 1.0 if taban_sinyali else False
+            v = float(v) * peer_severity_factor(s.get(scaler), taban)
         return sigmoid((float(v) - esik) / max(sd["olcek"], EPS))
 
     def _suppressed(self, rule: dict, s: dict, day: pd.Timestamp, sid: str, pseudo: str) -> Optional[str]:
         for b in rule.get("bastirma", []):
             if b == "servis_hesaplari" and s.get("servis_hesabi") == 1:
                 return "servis_hesaplari"
+            if b == "izin_donusu" and s.get("izin_donusu") == 1:
+                # 9.3: kayıtlı devamsızlık sonrası dönüş günü — hacim/dosya sapması meşru kaymadır
+                return "izin_donusu (kayıtlı devamsızlık takvimi — 9.3)"
             if b == "yedekleme_penceresi" and day.dayofweek == 6:
                 hrs = s.get("mesai_disi_saatler") or []
                 if hrs and all(2.0 <= h < 4.0 for h in hrs):
@@ -161,9 +195,16 @@ class DetectionEngine:
 
 
 def _names(rule: dict) -> List[str]:
+    """Koşullarda geçen sinyaller + şiddet sinyali ve ölçekleyicileri (rapor akran oranını göstermeye devam etsin)."""
     out = []
     for c in rule["mantik"]["kosullar"]:
         for node in ast.walk(ast.parse(c, mode="eval")):
             if isinstance(node, ast.Name) and node.id not in out:
                 out.append(node.id)
+    sd = rule.get("siddet") or {}
+    extras = [sd.get("sinyal"), sd.get("akran_olcekleyici"), sd.get("olcekleyici_taban_sinyali")]
+    extras += list(rule.get("rapor_sinyalleri") or [])  # koşulda geçmeyen ama rapora giren sinyaller
+    for extra in extras:
+        if extra and extra not in out:
+            out.append(extra)
     return out

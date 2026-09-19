@@ -1,6 +1,6 @@
 id: UEBA-0007
 ad: Mesai dışı toplu dosya erişimi
-surum: '1.0'
+surum: '1.1'
 durum: yayinda
 katman: UEBA
 attack:
@@ -15,16 +15,18 @@ mantik:
   kosullar:
   - saat_sapmasi_z > 3.0 or mesai_disi_dosya_orani > 0.5
   - dosya_sayisi_poisson_p < 0.001
-  - dosya_sayisi_akran_kati > 5.0
 siddet:
   sinyal: dosya_sayisi_poisson_p
   esik: 0.001
   olcek: 3.0
   donusum: log10
+  akran_olcekleyici: dosya_sayisi_akran_kati
+  olcekleyici_taban_sinyali: kritik_varlik_erisim_sayisi
 agirlik: 8
 bastirma:
 - servis_hesaplari
 - yedekleme_penceresi
+- izin_donusu
 sahip: guvenlik-operasyon
 runbook: RB-UEBA-0007
 kanit:
@@ -38,6 +40,13 @@ test_senaryolari:
     mesai_disi_dosya_orani: 0.9
     dosya_sayisi_poisson_p: 1.0e-09
     dosya_sayisi_akran_kati: 12
+- ad: akran_tavani_altinda_veri_yogun_departman
+  beklenen: true
+  sinyaller:
+    saat_sapmasi_z: 1.0
+    mesai_disi_dosya_orani: 0.9
+    dosya_sayisi_poisson_p: 1.0e-09
+    dosya_sayisi_akran_kati: 4.5
 - ad: toplu_indirme_mesai_ici
   beklenen: false
   sinyaller:
@@ -45,4 +54,5 @@ test_senaryolari:
     mesai_disi_dosya_orani: 0.0
     dosya_sayisi_poisson_p: 1.0e-09
     dosya_sayisi_akran_kati: 12
-notlar: ''
+notlar: '1.1: akran oranı (dosya_sayisi_akran_kati) VE koşulundan çıkarıldı, şiddet ölçekleyicisine
+  dönüştürüldü — UEBA-0003 ile aynı gerekçe (12.4 akran vetosu bulgusu).'
