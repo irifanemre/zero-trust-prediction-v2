@@ -1,6 +1,6 @@
 # Zero Trust Prediction — Nihai Birleşik Mimari ve Uygulama Dokümanı
 
-**Sürüm:** 1.1 (Final 1.0 üzerine uygulama ve doğrulama düzeltmeleri)
+**Sürüm:** 1.2 (1.1 üzerine mimari ↔ uygulama denetimi düzeltmeleri)
 **Kapsam:** MSSP/MSOC ortamı için güvenlik analitiği mimarisi
 **Tarih:** Eylül 2026
 **Kaynak:** Final 1.0 (zero_trust_prediction_mimari (3).md + zero-trust-prediction-birlesik-v4.md birleşimi) + `ztp` referans uygulaması ve CERT r4.2 doğrulaması
@@ -12,6 +12,24 @@ Düzeltme yaklaşımı (1.1): 1.0 metni korunmuş; uygulama (`src/ztp`) ve CERT 
 Bu doküman neyi kapsar: Sistemin katmanlı mimarisi, model ve teknoloji seçimleri, maliyet yapısı, doğrulama yöntemi ve operasyonel gereksinimler.
 
 Bu doküman neyi kapsamaz: Saldırı/savunma teknikleri detayı, ürünleştirme takvimi, altyapı boyutlandırması.
+
+---
+
+## Değişiklik günlüğü — 1.1 → 1.2
+
+`docs/mimari-dokuman.md` ile `src/ztp` arasında yapılan denetimden çıkan düzeltmeler. Her satır bir koda, bir kurala ve bir ölçüme bağlıdır; ölçümler `docs/bulgular.md` içindedir.
+
+| Bölüm | 1.1 | 1.2 (düzeltilmiş) | Kanıt / kod |
+|---|---|---|---|
+| 9.1 / 11.4 | Akran grubu "bağlam düzelticisi" | Yetkisinin sınırı yazıldı: akran oranı **tetikleyemez, yalnızca şiddeti ve sıradaki önceliği belirler**. 1.1'de UEBA-0003/0007 akran oranını VE koşulu olarak taşıdığından akran grubu fiilen veto yetkisine sahipti | `rules/UEBA-0003.yaml`, `rules/UEBA-0007.yaml` (sürüm 1.1) |
+| 12.4 | — | **Yeni sınır:** kurbanın kendi cihazından, mesai saatinde, aynı ülkeden çalışan saldırgan. Akran vetosu kaldırıldı; veri yoğun departmanlardaki yapısal kör nokta kapatıldı | `bulgular.md → Bulgu 1` |
+| 13.2 | `sigmoid((sinyal − eşik) / ölçek)` | `akran_olcekleyici` adımı eklendi: sinyal, sigmoid'den önce `clip(log10(oran)/log10(5), 0.2, 2.0)` ile ölçeklenir; `olcekleyici_taban_sinyali` kritik varlıkta indirimi engeller | `detection.engine.peer_severity_factor` |
+| 12.1 | `siddet{sinyal, esik, olcek}` | Şema genişledi: `akran_olcekleyici`, `olcekleyici_taban_sinyali`, `rapor_sinyalleri` | `detection/rules/*.yaml` |
+| 2.3 | 7g kümülatif pencere (USB, dosya) | Veri hacmine de uygulandı: `veri_hacmi_7g_z`, `veri_hacmi_anomali_z`. 1.1'de söz verilmiş ama hacimde uygulanmamıştı | `profile.signals` |
+| 12.5 | Kural içi bastırmalar: `servis_hesaplari`, `yedekleme_penceresi` | `izin_donusu` eklendi: kayıtlı devamsızlık dönüşü UEBA katmanında bastırılır, sayılır ve raporlanır | `detection.engine._suppressed` |
+| 23.5 | ADR-001…014 | +ADR-015 akran oranı tetikleyici değildir | `bulgular.md → Bulgu 1` |
+
+Ölçülen etki (sentetik, 150 kullanıcı / 30 gün, bütçe 8): vaka 184 → 229, precision@1 0,70 → **0,97**, doğru vaka 66 → 75, kapsama 8/8 korundu, S9 negatif kontrolü korundu, test 82/82.
 
 ---
 
@@ -204,6 +222,7 @@ Tespit sistemi tasarlanırken, saldırganın sistemin varlığını bildiği var
 > **1.1 düzeltmesi — uygulamadaki karşılıklar.**
 > - *Baseline zehirleme:* 7 günlük medyan 90 günlük medyandan robust-z > 2,5 koparsa `zehirleme_suphesi` bayrağı; skorlama akran referansına yaslanır (`stats.drift_suspicion`). CERT'te bayrak ölçüm raporuna yazılır.
 > - *Eşik altı kalma:* USB ve dosya sayımlarında **7 günlük kümülatif** Poisson penceresi (`usb_7g_poisson_p`, `dosya_7g_poisson_p`); CERT S2'de günlük eşiğin altında kalan USB artışı böyle yakalandı (UEBA-0017). Ondalık eşiklerde ±%5 deterministik jitter (21.2).
+> - *(1.2)* Kümülatif pencere **veri hacmine de uygulandı**: `veri_hacmi_7g_z` ve `veri_hacmi_anomali_z = max(günlük z, 7g z)`. 1.1'de bu savunma yalnızca dosya ve USB sayımları için yazılmıştı; hacimde yoktu — yani eşik altında kalarak veri sızdıran saldırgan için söz verilen karşı önlem uygulanmamıştı (12.4).
 > - *Log silme / ajan kapatma:* DQ-0010 "cihaz o gün AD'de aktif kullanıldı ama EDR akışı yok" mantığıyla çalışır; kapalı/kullanılmayan cihaz sessizlik sayılmaz (ilk sürümde yanlış pozitif kaynağıydı).
 > - *Yeni satır — Tuzak farkındalığı:* Saldırgan eşik öğrenemez; tuzak varlıkla tek etkileşim yeterlidir (12.6). Tuzak listesi müşteri yapılandırmasındadır ve raporlarda tuzak olduğu açıkça yazılır; tuzağın gizliliği dağıtım tarafının sorumluluğudur.
 
@@ -580,6 +599,12 @@ Minimum grup boyutu: 8 kişi. Altına düşülürse bir üst seviyeye çıkılı
 | İstatistiksel | Küçük örneklemde varyans tahmini güvenilmez |
 | Gizlilik | 3 kişilik grupta "akrandan sapma" fiilen bireyi işaret eder |
 
+> **1.2 düzeltmesi — akran kıyasının yetkisi: şiddet, tetikleme değil.** Akran grubu bir **bağlam düzelticisidir**; bir sinyali güçlendirebilir ya da zayıflatabilir, ancak **yok edemez**. Bu, 1.1'de ihlal ediliyordu: UEBA-0003 ve UEBA-0007 akran oranını VE koşulu olarak taşıdığından akran grubu fiilen **veto yetkisine** sahipti. Sonuç, akran medyanı yüksek olan veri yoğun departmanlarda (finans, ArGe) kişisel olarak uç bir sapmanın bile görünmez kalmasıydı — ateşlenmek için gereken mutlak eşik, departmanın veri yoğunluğuyla birlikte yükseliyordu.
+>
+> Kural şudur: **kişisel sapma tek başına tetikler; akran oranı yalnızca şiddeti ve dolayısıyla 13.5 sıralamasındaki önceliği belirler.** Akranıyla aynı davranan kullanıcı kuyruktan elenmez, kuyruğun altına düşer; sessiz günlerde bütçe ona da yer açar (13.1). Ölçülen etki: kuyruğun tepesi temizlendi (precision@1 0,70 → 0,97), doğru vaka sayısı 66 → 75, alarm hacmi bütçe altında kaldı. Ayrıntı: 12.4, 13.2 ve `docs/bulgular.md → Bulgu 1`.
+>
+> Bu ayrımın gerekçesi ADR-007'nin kendisindedir: akran ağırlığının hiç sıfırlanmaması, baseline zehirlemeye karşı **sabit bir referans tutmak** içindir — sinyal susturmak için değil. Akran grubunu bir filtre hâline getirmek, aracı amacının tersine çevirir.
+>
 > **1.1 notu.** `peers.PeerGroups`: yapısal anahtar departman+unvan+lokasyon → 8'in altında departman+unvan → departman → kurum. Davranışsal çelişki `akran_celiski` sinyali olarak üretilir (zayıf sinyal; gölge kural UEBA-0009 ile ölçülür). Akran istatistikleri (medyan/MAD/küme) gözlem grafından değil, varlık-gün özellik tablosundan hesaplanır; graf akran *cihaz* kümeleri ve yabancı cihaz oranı için kullanılır.
 
 ### 9.2 Baseline Penceresi ve Ağırlıklandırma
@@ -764,9 +789,11 @@ Her kullanıcı için davranışsal baseline oluşturulur ve anlık sapma skoru 
 |---|---|---|
 | Kişisel robust baseline | Ana dedektör | "Bu kullanıcının kendi normaline göre sapma" |
 | Isolation Forest | Destek dedektör | Tanımlanmamış türden çok boyutlu anomaliler |
-| Akran grubu kıyası | Bağlam düzelticisi | "Aynı roldeki diğer kullanıcılara göre sapma" |
+| Akran grubu kıyası | Bağlam düzelticisi — **tetikleyici değil** *(1.2)* | "Aynı roldeki diğer kullanıcılara göre sapma"; şiddet çarpanı olarak skora girer |
 
 **Akran grubu kıyasının gerekçesi:** Tek başına değerlendirildiğinde anormal görünen davranış, rol bağlamında normal olabilir. Finans ekibinden bir kullanıcının ay sonu kapanış döneminde gece mesaisi yapması, ekibin tamamı aynı davranışı gösteriyorsa anomali değildir. Bu kıyas, yanlış pozitif oranını düşüren en etkili sinyallerden biridir ve graf katmanının sürekli çalışmasını gerektirir.
+
+> **1.2 sınırı — akran kıyası neyi yapmaz.** Akran bağlamı bir tespiti **iptal edemez**. Yukarıdaki finans örneğinde ekibin tamamı gece çalışıyorsa kullanıcının şiddeti düşer ve kuyruğun altına iner; ancak kişisel sapması uçsa bile hiç görünmemesi kabul edilebilir değildir. Aksi hâlde akran medyanı yüksek olan departmanlar yapısal bir kör nokta hâline gelir ve ele geçirilmiş hesap, departman normunun altında kalarak çalışabilir. Uygulamada akran oranı bu nedenle `akran_olcekleyici` (13.2) olarak taşınır, kural koşulu olarak değil. Yanlış pozitifin doğru adresi akran oranı değil, **bastırma mekanizmasıdır** (12.5): bilinen istisna orada, gerekçesiyle ve sayılarak yönetilir — örnek: kayıtlı izin dönüşü (`izin_donusu`).
 
 > **1.1 notu.** Isolation Forest `UEBA-IF01` gölge kuralıdır (skora girmez; `shadow_log.jsonl`'a yazılır, en çok katkı veren özellikler robust-z ile açıklanır). Ana dedektörün ürettiği her sinyal adlandırılmıştır (`veri_hacmi_z`, `dosya_sayisi_poisson_p`, `saat_sapmasi_z`, `cihaz_yenilik_akran_nadirlik`, …) ve kural tanımlarında bu adlarla kullanılır (12.1). Akran bağlamının değeri: 9.2 ablasyon kanıtı.
 
@@ -823,7 +850,7 @@ Tespit kuralları uygulama koduna gömülmez. Her tespit, sürüm kontrollü bir
 ```yaml
 id: UEBA-0007
 ad: Mesai dışı toplu dosya erişimi
-surum: '1.0'
+surum: '1.1'
 durum: yayinda              # taslak | golge-modda | yayinda | emekli
 katman: UEBA                # UEBA | veri-kalitesi | Prediction | iliskisel | aldatma
 attack: [T1039, T1530]
@@ -834,15 +861,18 @@ mantik:
   kosullar:                 # adlandırılmış sinyaller; güvenli ifade değerlendirici (AST)
     - saat_sapmasi_z > 3.0 or mesai_disi_dosya_orani > 0.5
     - dosya_sayisi_poisson_p < 0.001
-    - dosya_sayisi_akran_kati > 5.0
-siddet:                     # sigmoid((sinyal − eşik) / ölçek) → 0–1 (13.2)
+    # 1.2: akran oranı KOŞUL DEĞİLDİR — tetikleme tamamen kişiseldir (12.4, ADR-015)
+siddet:                     # sigmoid((sinyal × akran_çarpanı − eşik) / ölçek) → 0–1 (13.2)
   sinyal: dosya_sayisi_poisson_p
   esik: 0.001
   olcek: 3.0
   donusum: log10
+  akran_olcekleyici: dosya_sayisi_akran_kati               # 1.2: yalnızca ŞİDDETİ ölçekler
+  olcekleyici_taban_sinyali: kritik_varlik_erisim_sayisi   # >=1 → akran indirimi uygulanmaz
 agirlik: 8
 kritik: false               # true → 13.5 kritik istisna: tek başına, bütçeden bağımsız
-bastirma: [servis_hesaplari, yedekleme_penceresi]   # Pazar 02:00-04:00
+bastirma: [servis_hesaplari, yedekleme_penceresi, izin_donusu]   # Pazar 02:00-04:00; izin dönüşü (12.5)
+rapor_sinyalleri: [dosya_sayisi_akran_kati]   # 1.2: koşulda geçmeyen ama rapora yazılan sinyaller
 sahip: guvenlik-operasyon
 runbook: RB-UEBA-0007       # zorunlu; runbooks/RB-UEBA-0007.md yoksa katalog yüklenmez (17.4)
 kanit: [file, offhours]     # rapora yazılacak olay kimliği aileleri
@@ -851,6 +881,10 @@ test_senaryolari:           # `ztp --test-rules` ve CI'da çalışır
     beklenen: true
     sinyaller: {saat_sapmasi_z: 1.0, mesai_disi_dosya_orani: 0.9,
                 dosya_sayisi_poisson_p: 1.0e-9, dosya_sayisi_akran_kati: 12}
+  - ad: akran_tavani_altinda        # 1.2 regresyon: akran oranı düşük, kişisel sapma uç
+    beklenen: true
+    sinyaller: {saat_sapmasi_z: 1.0, mesai_disi_dosya_orani: 0.9,
+                dosya_sayisi_poisson_p: 1.0e-9, dosya_sayisi_akran_kati: 4.5}
   - ad: toplu_indirme_mesai_ici
     beklenen: false
     sinyaller: {saat_sapmasi_z: 0.5, mesai_disi_dosya_orani: 0.0,
@@ -877,11 +911,11 @@ Bu yapının sağladıkları:
 |---|---|---|---|---|---|---|
 | 1 | Mesai dışı aktivite | Dairesel istatistik (saat) + mesai dışı giriş sayısı Poisson | T1078 | Orta | UEBA | yayında |
 | 2 | İlk kez görülen uygulama | Küme farkı (kişi + akran); hassas kategoriler kişisel ilk kezde | T1204 | Yüksek | UEBA | yayında |
-| 3 | Anormal veri çıkış hacmi | Robust z + akran katı | T1567 | Orta | UEBA | yayında |
+| 3 | Anormal veri çıkış hacmi | Robust z (günlük **veya** 7g kümülatif); akran katı yalnızca şiddet çarpanı *(1.2)* | T1567 | Orta | UEBA | yayında |
 | 4 | İmkânsız seyahat | Mesafe / süre hesabı | T1078 | Düşük | UEBA | yayında |
 | 5 | Yeni cihaz veya konum | Küme farkı; şiddet akran yabancı-cihaz oranıyla ölçekli; başkasına atanmış cihaz | T1078 | Orta | UEBA | yayında |
 | 6 | Başarısız giriş yığını | Poisson | T1110 | Düşük | UEBA | yayında |
-| 7 | Mesai dışı toplu dosya erişimi | Çoklu koşul | T1039, T1530 | Orta | UEBA | yayında |
+| 7 | Mesai dışı toplu dosya erişimi | Çoklu koşul (saat + Poisson); akran katı yalnızca şiddet çarpanı *(1.2)* | T1039, T1530 | Orta | UEBA | yayında |
 | 8 | Hesap yaşı × keşif yoğunluğu | Kural + sayım | T1087, T1018 | Düşük | UEBA | yayında |
 | 9 | Akran grubundan yapısal sapma | Çok değişkenli mesafe | — | Orta | UEBA | **gölge** |
 | 10 | Log kesintisi / ajan sessizliği | Beklenen akış kontrolü (cihaz AD'de aktif, EDR yok) | T1562 | Düşük | Veri kalitesi | yayında |
@@ -988,11 +1022,20 @@ günlük_risk(kullanıcı) = Σ [ ağırlık(tespit) × şiddet × zaman_bozunum
 | Bileşen | Tanım |
 |---|---|
 | Ağırlık | Tespit tanımında belirtilen taban değer (bkz. 12.1) |
-| Şiddet | Sapmanın büyüklüğü, sigmoid ile 0–1 aralığına sıkıştırılır. Ham z-score kullanılmaz — tek bir uç değer toplamı domine etmemelidir |
+| Şiddet | Sapmanın büyüklüğü, sigmoid ile 0–1 aralığına sıkıştırılır. Ham z-score kullanılmaz — tek bir uç değer toplamı domine etmemelidir. *(1.2)* Kuralda `akran_olcekleyici` varsa sinyal, sigmoid'den **önce** akran çarpanıyla ölçeklenir — akran bağlamı şiddete girer, tetiklemeye değil |
 | Zaman bozunumu | Son 24 saat tam ağırlık; 7 gün öncesi 0.3 katsayı |
 | Model terimi *(1.1)* | Öğrenen 7g olasılığı kural skorunu **ezmez, ekler** (14.6); tespiti olmayan kullanıcıya model tek başına puan vermez |
 
 > **1.1 notu.** Şiddet = sigmoid((sinyal − eşik) / ölçek); log10 dönüşümü p-değerleri için. Bozunum gün 0'da 1,0'dan gün 7'de 0,3'e doğrusal. Her katkı `case.tespitler[].katki` olarak raporlanır (Prensip 4).
+>
+> **1.2 düzeltmesi — akran çarpanı.** Kuralda `akran_olcekleyici` tanımlıysa formül şu adımı kazanır:
+>
+> ```
+> şiddet = sigmoid( (sinyal × akran_çarpanı − eşik) / ölçek )
+> akran_çarpanı = clip( log10(akran_oranı) / log10(5.0), 0.2, 2.0 )
+> ```
+>
+> Nötr nokta, akran oranının 1.1'de VE koşulu olarak taşıdığı eşiktir: oran 5× iken çarpan 1,0; 1,3× iken 0,2; 40× iken 2,0 (üst sınır). Böylece akranıyla aynı davranan kullanıcı **elenmez**, yalnızca şiddeti — dolayısıyla 13.5 sıralamasındaki yeri — düşer. `olcekleyici_taban_sinyali` (kritik varlık erişimi) ≥ 1 ise çarpan 1,0'ın altına inmez: bordro dosyasından gelen hacim, departman medyanı yüksek diye indirime uğramaz. Gerekçe ve ölçüm: 12.4 ve `docs/bulgular.md → Bulgu 1`.
 
 ### 13.3 Korelasyon Çarpanları
 
@@ -1690,6 +1733,7 @@ Her mimari karar için bağlam, değerlendirilen seçenekler, verilen karar, son
 | **ADR-011** *(1.1)* | Tuzak (honeytoken) etkileşimi deterministik kritik tespittir: baseline/akran/jitter yok, bütçeden bağımsız; tuzak hesap kullanımı hesaba değil kaynağa atfedilir; atfedilemeyen etkileşim kaybolmaz | Meşru kullanımı olmayan varlığın "normali" yoktur; 13.1'in tek istisnası | `deception.py`, `HONEY-0018/19/20` |
 | **ADR-012** *(1.1)* | LLM/RAG istemi injection'a kapalıdır: log kaynaklı her metin veridir; kanonikleştirme + redaksiyon + nonce'lu bloklar + en az veri + tam kimlikle RAG + bütünlük manifesti + sıkı çıktı doğrulaması; şüphede LLM çağrılmaz | Log alanları saldırgan tarafından yazılabilir; rapor hukuki sorumluluk taşır | `reporting.sanitize/rag/llm` |
 | **ADR-013** *(1.1)* | 7g olasılık öğrenen lojistik modeldir (JSON, sürümlü, zamansal holdout, sınıf ağırlığı yok); kural skorunu ezmez, `prediction_weight` ile eklenir (varsayılan 0); kalibrasyon her koşuda kontrol grubuyla ölçülür | Kalibre olasılık > sıralama; açıklanabilir katsayılar; 14.5/14.6 şartları | `prediction_model.py` |
+| **ADR-015** *(1.2)* | **Akran oranı bir tespiti tetikleyemez veya iptal edemez; yalnızca şiddeti — dolayısıyla inceleme sırasındaki önceliği — belirler.** Yanlış pozitifin adresi akran oranı değil, gerekçesiyle ve sayılarak yönetilen bastırma mekanizmasıdır (12.5) | Akran oranı VE koşulu olduğunda, ateşlenme için gereken mutlak eşik departmanın veri yoğunluğuyla yükselir; veri yoğun departmanlar yapısal kör noktaya dönüşür (12.4). ADR-007'de akran referansının amacı sabit referans tutmaktır, sinyal susturmak değil | `detection.engine.peer_severity_factor`, `UEBA-0003/0007`, `bulgular.md → Bulgu 1` |
 | **ADR-014** *(1.1)* | Ham olay saklanmaz; yalnızca türev veri SQLite durum deposunda; günlük mod su seviyesiyle idempotent; toplu≡artımlı eşdeğerliği testle korunur | Saklama süresi/veri minimizasyonu; "geçmiş yalnızca geçmişten" | `state.py`, `tests/test_state.py` |
 
 ---
