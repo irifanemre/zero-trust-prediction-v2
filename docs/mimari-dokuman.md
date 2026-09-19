@@ -942,7 +942,9 @@ Bastırma kuralları birikerek sistemi zamanla körleştirir. Bu nedenle:
 
 İzlenen metrik: Bastırılan olay / toplam olay oranı. Bu oran belirlenen sınırı aşarsa kural revizyonu tetiklenir.
 
-> **1.1 notu.** Müşteri yapılandırması `suppressions: [{rule_id, sid|takma ad, start, end, reason, owner}]`; `end` yoksa `start + 90 gün`. Bastırılanlar `suppressed.jsonl` ve `metrics.json → bastirma.oran`. Kural içi bastırmalar: `servis_hesaplari`, `yedekleme_penceresi`. **Tuzak kuralları bastırılmaz** (12.6): yanlış pozitif kaynağı servis hesabı olarak işaretlenir veya tuzak dağıtımı düzeltilir.
+> **1.1 notu.** Müşteri yapılandırması `suppressions: [{rule_id, sid|takma ad, start, end, reason, owner}]`; `end` yoksa `start + 90 gün`. Bastırılanlar `suppressed.jsonl` ve `metrics.json → bastirma.oran`. Kural içi bastırmalar: `servis_hesaplari`, `yedekleme_penceresi`, `izin_donusu` *(1.2)*. **Tuzak kuralları bastırılmaz** (12.6): yanlış pozitif kaynağı servis hesabı olarak işaretlenir veya tuzak dağıtımı düzeltilir.
+
+> **1.2 notu — `izin_donusu` bastırması.** Kayıtlı devamsızlık sonrası dönüş gününde hacim ve dosya sapması meşru kaymadır (9.3, 17.2); UEBA-0003 ve UEBA-0007 bu günde bastırılır. Sinyal `profile.signals` içinde `ctx.last_active` + izin takviminden üretilir — `prediction.izin_kayitli` ile aynı mantıktır, yalnızca katman sırası nedeniyle (UEBA, Prediction'dan önce çalışır) orada tekrarlanır. Bastırma seçilmesinin gerekçesi: bastırılan olay **sayılır ve raporlanır** (`suppressed.jsonl`, `bastirma.oran`), kural mantığını kirletmez ve kuralın kendisi sessizce kısıtlanmaz. Bu bastırma, akran oranının VE koşulu olmaktan çıkarılmasının (12.4) yanlış pozitif maliyetini karşılar: ölçümde akran oranı izin dönüşünü (~4×) saldırı senaryosundan (~4,5×) ayırt edemiyordu, izin takvimi ayırt ediyor. Ölçüm: `docs/bulgular.md → Bulgu 1`.
 
 ### 12.6 Aldatma Katmanı — Tuzak Varlıklar (honeytoken) *(1.1, yeni)*
 

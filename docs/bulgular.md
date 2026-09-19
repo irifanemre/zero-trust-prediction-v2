@@ -98,10 +98,10 @@ bağlam düzelticisini sessiz bir filtreye dönüştürmüştü.
 | UEBA-0003 skor payı | 0,291 | 0,414 | +0,123 |
 | Test paketi | 82/82 | **82/82** | korundu |
 
-Yorum: alarm hacmi %25 arttı ama **analist kapasitesinin (8/gün) altında kaldı**.
+Yorum: alarm hacmi %24 arttı ama **analist kapasitesinin (8/gün) altında kaldı**.
 Kuyruğun tepesi belirgin biçimde temizlendi (precision@1 0,70 → 0,97): akran oranı
 artık eleme değil sıralama yaptığı için gerçek anomaliler yukarı çıkıyor. Kuyruğun
-kuyruğu seyreldi (precision@10 −0,033), bu 13.1'in bilinçli sonucudur — sessiz günlerde
+kuyruğu seyreldi (precision@10 −0,031), bu 13.1'in bilinçli sonucudur — sessiz günlerde
 bütçe düşük skorlu vakalarla dolar. Kapsama değişmedi çünkü sentetik senaryo setinde
 **veri yoğun departmanda ele geçirilmiş hesap senaryosu yok**; bulgu sentetik koşuyla
 değil, kural birim testiyle kanıtlanmıştır (bkz. Değişiklik 6).
