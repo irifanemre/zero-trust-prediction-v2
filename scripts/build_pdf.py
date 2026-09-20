@@ -15,7 +15,7 @@ import markdown
 
 SRC = Path(sys.argv[1])
 OUT = Path(sys.argv[2])
-VERSION, DATE, COMMIT = "1.1", "Eylül 2026", "aac4315"
+VERSION, DATE, COMMIT = "1.2", "Eylül 2026", "0a013cc"
 
 md_text = SRC.read_text(encoding="utf-8")
 
@@ -62,12 +62,13 @@ def _head(m: re.Match) -> str:
 
 body_html = re.sub(r"<h([23])>(.*?)</h\1>", _head, body_html, flags=re.S)
 
-# --- 1.1 düzeltme/not blokları vurgulanır
-body_html = re.sub(r"<blockquote>\s*<p><strong>1\.1", '<blockquote class="rev">\n<p><strong>1.1', body_html)
-body_html = re.sub(r"<blockquote>\s*<p><strong>1\.1", '<blockquote class="rev">\n<p><strong>1.1', body_html)
+# --- 1.1 / 1.2 düzeltme/not blokları vurgulanır
+body_html = re.sub(r"<blockquote>\s*<p><strong>1\.([12])", r'<blockquote class="rev">\n<p><strong>1.\1', body_html)
 # (blok içinde tablo ile başlayan düzeltmeler)
 body_html = re.sub(
-    r"<blockquote>\s*<p><strong>1\.1 (düzeltmesi|notu|eki|—)", r'<blockquote class="rev">\n<p><strong>1.1 \1', body_html
+    r"<blockquote>\s*<p><strong>1\.([12]) (düzeltmesi|notu|eki|sınırı|—)",
+    r'<blockquote class="rev">\n<p><strong>1.\1 \2',
+    body_html,
 )
 # geniş ASCII diyagramlar / rapor kutuları: sarmadan, küçük punto
 body_html = body_html.replace('<pre><code class="language-yaml">', '<pre class="yaml"><code>')
