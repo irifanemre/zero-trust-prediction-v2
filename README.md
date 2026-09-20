@@ -129,10 +129,14 @@ Günlük servis modu (`--daily`), SQLite durum deposu, imzalı webhook/JSONL sin
 
 ## Dokümantasyon
 
-- [docs/mimari-dokuman.md](docs/mimari-dokuman.md) — mimari dokümanın md sürümü (**1.1**): Final 1.0 metni + uygulama ve CERT
-  doğrulamasıyla düzeltilen bölümler (`1.1 düzeltmesi` blokları), 1.0→1.1 değişiklik günlüğü, ADR-011…014.
-  PDF: [docs/Zero_Trust_Prediction_Mimari_v1.1.pdf](docs/Zero_Trust_Prediction_Mimari_v1.1.pdf)
-  (`pip install -e ".[docs]"` → `python scripts/build_pdf.py docs/mimari-dokuman.md docs/Zero_Trust_Prediction_Mimari_v1.1.pdf`).
+- [docs/mimari-dokuman.md](docs/mimari-dokuman.md) — mimari dokümanın md sürümü (**1.2**): Final 1.0 metni + uygulama ve CERT
+  doğrulamasıyla düzeltilen bölümler (`1.1 düzeltmesi` blokları), mimari ↔ uygulama denetiminden çıkan düzeltmeler
+  (`1.2 düzeltmesi` blokları), 1.0→1.1 ve 1.1→1.2 değişiklik günlükleri, ADR-011…015.
+  PDF: [docs/Zero_Trust_Prediction_Mimari_v1.1.pdf](docs/Zero_Trust_Prediction_Mimari_v1.1.pdf) — **1.1 baskısıdır, md 1.2'dir**;
+  yeniden üretmek için (`pip install -e ".[docs]"`, pango gerekir):
+  `python scripts/build_pdf.py docs/mimari-dokuman.md docs/Zero_Trust_Prediction_Mimari_v1.2.pdf`.
+- [docs/bulgular.md](docs/bulgular.md) — mimari ↔ uygulama denetiminin bulguları: ne beklendiği, ne bulunduğu, yapılan
+  değişiklik ve önce/sonra ölçümü.
 - [docs/architecture.md](docs/architecture.md) doküman→kod eşlemesi · [docs/cert-validation.md](docs/cert-validation.md) ·
   [docs/prediction.md](docs/prediction.md) · [docs/operations.md](docs/operations.md) · [docs/llm-security.md](docs/llm-security.md)
 
