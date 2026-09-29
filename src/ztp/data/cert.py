@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -14,6 +15,42 @@ from ztp.data.dataset import Dataset
 from ztp.schema import DAY, EVENT_COLUMNS, OCSF_AUTH, OCSF_EMAIL, OCSF_FILE, OCSF_HTTP
 
 LOG = logging.getLogger(__name__)
+
+
+# Veri yolu repoya gömülmez: CERT ~20 GB'tır ve repo dışında (ör. OneDrive dışı bir diskte) durur.
+CERT_PATH_ENV = "ZTP_CERT_PATH"
+
+
+def resolve_cert_dir(explicit: Optional[str] = None) -> Path:
+    """CERT sürüm dizinini bulur: açık yol > `ZTP_CERT_PATH` ortam değişkeni.
+
+    Yol ya sürüm dizinini (`.../r4.2`: içinde `logon.csv` ve `LDAP/`) ya da onu içeren kök dizini (`.../cert_r4.2`)
+    gösterebilir; kökte `logon.csv` içeren tek bir `r*` alt dizini varsa o seçilir. Sürüm dizin ADINDAN okunur
+    (`load_cert_dataset` cevap anahtarını `dataset == "4.2"` ile süzer) — bu yüzden dönen dizin her zaman `r*` adlıdır;
+    adı `r` ile başlamayan bir dizin açık hata verir (sessizce sıfır insider üretmesin — Prensip 5)."""
+    raw = explicit or os.environ.get(CERT_PATH_ENV, "")
+    if not raw:
+        raise FileNotFoundError(
+            f"CERT yolu verilmedi: --cert-dir <sürüm dizini> kullanın ya da {CERT_PATH_ENV} ortam değişkenini ayarlayın (README)."
+        )
+    p = Path(raw).expanduser()
+    if not p.is_dir():
+        raise FileNotFoundError(f"CERT dizini bulunamadı: {p}")
+    if (p / "logon.csv").exists():
+        cand = p
+    else:
+        found = sorted(d for d in p.iterdir() if d.is_dir() and d.name.startswith("r") and (d / "logon.csv").exists())
+        if not found:
+            raise FileNotFoundError(f"{p} içinde CERT sürüm dizini (logon.csv içeren r* klasörü) bulunamadı")
+        if len(found) > 1:
+            names = ", ".join(d.name for d in found)
+            raise FileNotFoundError(f"{p} içinde birden çok sürüm var ({names}); sürüm dizinini doğrudan verin")
+        cand = found[0]
+    if not cand.name.startswith("r"):
+        raise FileNotFoundError(
+            f"Sürüm dizini adı 'r<sürüm>' olmalı (ör. r4.2), bulunan: {cand.name} — sürüm cevap anahtarını süzmek için adından okunur"
+        )
+    return cand
 
 
 URL_CATEGORIES = [

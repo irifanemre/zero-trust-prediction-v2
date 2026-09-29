@@ -72,10 +72,31 @@ pytest                                             # 82 test (~3 dk; uçtan uca,
 
 Veri: SEI/CMU, https://doi.org/10.1184/R1/12841247 (CC BY 4.0). `scripts/download_cert.py` sha256 doğrulamalı indirir.
 
+Veri **repo dışında** durur (açılınca ~15–20 GB; repo OneDrive gibi senkronlanan bir klasördeyse oraya indirmeyin).
+Yol repoya gömülmez, `ZTP_CERT_PATH` ortam değişkeniyle verilir. Değişken sürüm dizinini (`…/r4.2`) ya da onu içeren
+kök dizini gösterebilir; sürüm dizin adından okunduğu için dizin adı `r4.2` biçiminde kalmalıdır.
+
 ```bash
-python scripts/download_cert.py --release r4.2 --dest ./cert_data     # ~4.8 GB + cevap anahtarı
-ztp --cert-dir cert_data/r4.2 --end 2010-11-30 --days 90 --budget 10 --tenant cert-r42 --out ./ztp_out
+python scripts/download_cert.py --release r4.2 --dest C:/data/cert_r4.2   # ~4.8 GB + cevap anahtarı (answers/)
 ```
+
+```powershell
+# Windows PowerShell — yalnızca bu oturum:
+$env:ZTP_CERT_PATH = "C:\data\cert_r4.2\r4.2"
+# kalıcı (yeni açılan terminallerde geçerli olur):
+setx ZTP_CERT_PATH "C:\data\cert_r4.2\r4.2"
+```
+
+```bash
+# Linux / macOS
+export ZTP_CERT_PATH=/data/cert_r4.2/r4.2
+
+# --cert-dir değersiz verilirse yol ZTP_CERT_PATH'ten okunur; açık yol verilirse o kullanılır
+ztp --cert-dir --end 2010-11-30 --days 90 --budget 10 --tenant cert-r42 --out ./ztp_out
+```
+
+Cevap anahtarı varsayılan olarak sürüm dizininin kardeşi `answers/` altında aranır (`--answers-dir` ile değiştirilebilir).
+Değişken ayarlı olsa bile kaynak belirtmeyen `ztp` sentetik veriyle çalışır; CERT yalnızca `--cert-dir` ile seçilir.
 
 **r4.2** (1000 kullanıcı, 13,3M olay, 2 Eyl–30 Kas 2010, bütçe 10 vaka/gün, 34 etiketli insider):
 

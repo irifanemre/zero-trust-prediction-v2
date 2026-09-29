@@ -13,7 +13,7 @@ import pandas as pd
 
 from ztp.ablation import format_ablation, run_ablation
 from ztp.config import TenantConfig
-from ztp.data.cert import load_cert_dataset
+from ztp.data.cert import CERT_PATH_ENV, load_cert_dataset, resolve_cert_dir
 from ztp.data.files import dataset_from_files
 from ztp.data.synthetic import SyntheticOrg
 from ztp.detection.catalog import load_catalog
@@ -51,7 +51,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Zero Trust Prediction — mimari doğrulama (MVP) script'i")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--synthetic", action="store_true", help="sentetik kurum + enjekte senaryolar (kör test/regresyon)")
-    src.add_argument("--cert-dir", help="CERT Insider Threat dizini, ör. cert_data/r4.2 (birincil doğrulama)")
+    src.add_argument(
+        "--cert-dir",
+        nargs="?",
+        const="",
+        help=f"CERT sürüm dizini (ör. C:/data/cert_r4.2/r4.2); değersiz verilirse {CERT_PATH_ENV} ortam değişkeni okunur",
+    )
     ap.add_argument("--answers-dir", help="CERT cevap anahtarı dizini (varsayılan: <cert-dir>/../answers)")
     # günlük servis modu: durum deposundan devam eder, yalnızca verilen günün olaylarını işler
     ap.add_argument("--daily", metavar="YYYY-MM-DD", help="artımlı gün işleme (durum deposu gerekir)")
@@ -106,7 +111,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
     if args.daily:
         return cmd_daily(args, catalog)
-    if not args.synthetic and not args.cert_dir and not (args.events and args.directory):
+    if not args.synthetic and args.cert_dir is None and not (args.events and args.directory):
         args.synthetic = True
         LOG.info("Kaynak belirtilmedi; sentetik veri kullanılıyor")
 
@@ -129,9 +134,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not args.end:
             sys.exit("CERT için --end (veri aralığı içinde bir gün, ör. 2010-11-30) zorunludur")
         start_hist = end - (cfg.long_window_days + args.warmup + args.days) * DAY
-        answers = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
+        cert_dir = resolve_cert_dir(args.cert_dir or None)
+        answers = args.answers_dir or str(cert_dir.parent / "answers")
         data = load_cert_dataset(
-            args.cert_dir, start_hist, end, max_users=(args.users if args.users_given else None), answers_dir=answers
+            str(cert_dir), start_hist, end, max_users=(args.users if args.users_given else None), answers_dir=answers
         )
         # 11.1 kademeli işlevsellik: yalnızca mevcut kaynaklar (CERT'te EDR/VPN yok; r1'de e-posta/dosya da yok)
         cfg.available_sources = tuple(sorted(set(data.events["source"].unique()) | {"hr"}))
