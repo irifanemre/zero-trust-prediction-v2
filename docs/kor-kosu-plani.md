@@ -48,9 +48,22 @@ skor ya da kuyruk çıktısı üreten hiçbir şey koşulmaz.
 - **Senaryo ataması:** Her insider senaryosu, bitiş tarihini içeren pencerede ölçülür. "Kısmi pencere" tanımı r4.2 ile aynıdır.
 - **Bütçe:** 10 vaka/gün. Diğer bütün ayarlar `scripts/cert_eval.py` varsayılanları ve donmuş tenant varsayılanlarıdır.
   Eşik varyantı koşulmaz (`--no-variants`).
-- **Kullanıcılar:** Tüm kurum. Bellek yetmezse (RAM 15,6 GB) tek bir geri dönüş yolu vardır: `max_users = 1000`. Bu
-  durumda insider'ların hepsi tutulur, benign kullanıcılar tohum 0 ile seçilir. Precision insider yoğunluğuna bağlı
-  olduğu için raporda ayrıca belirtilir.
+- **Kullanıcılar:** Tüm kurum. Bellek sınırı (RAM 15,6 GB) şu sırayla çözülür:
+  1. **Parça parça işleme (önce bu denenir):** Loglar 1 milyonluk satır parçalarıyla okunur ve okurken pencere dışı
+     satırlar atılır. Koşu, yukarıdaki 90 günlük pencerelerle zamanda bölünür; her pencere yalnızca kendi 111 günlük
+     tarihçesini belleğe alır. Pencereler sırayla koşulur ve her pencereden sonra bellek boşaltılır. Bellek tahmini
+     tespit çıktısı üretmeden yapılır: yalnızca yükleyici koşulur ve olay sayısı ölçülür. r4.2'de ölçülen tepe bellekle
+     olay başına bellek hesaplanır.
+  2. **Örnekleme (yalnızca 1. adım yetmezse):** En büyük pencerenin tahmini tepe belleği 12 GB'ı aşarsa kullanıcılar
+     örneklenir. Örnek **katmanlı** ve **tek oranlıdır**: insider'lar dahil her katmandan (insider senaryo türü S1–S4 ve
+     benign) aynı oranda `f` kullanıcı, tohum 42 ile seçilir. Böylece insider oranı korunur.
+     `f = min(1, 12 GB / tahmini tepe)`, 0,05'lik adımla aşağı yuvarlanır. `f` koşudan önce, yalnızca yükleyici ölçümüyle
+     belirlenir ve bu belgeye eklenerek commit edilir. Tüm sonuçlar `f`, örneklenen kullanıcı ve insider sayıları ve
+     insider oranıyla birlikte raporlanır. Örnekleme akran gruplarını küçültür (en az akran grubu boyutu 8), bu da sınır
+     olarak raporlanır.
+  - **Kullanılmayacak yol:** "Kullanıcıları 1000'e indir, bütün insider'ları tut" yedeği **iptal edildi**. Bu yol insider
+    oranını yaklaşık iki katına çıkarır, precision'ı yapay olarak şişirir, akran gruplarını ve bütçe/kullanıcı oranını
+    değiştirir. Not: yükleyicideki `max_users` seçeneği bu davranışa sahip, bu yüzden kör koşuda kullanılmaz.
 
 ## 4. Raporlanacak metrikler
 
@@ -103,7 +116,13 @@ Bunlar hipotez, başarı eşiği değil. Sonuç ne çıkarsa çıksın olduğu g
   Precision bu yüzden iyimser çıkar. r4.2 README'si o sürümü açıkça "dense needles" olarak tanımlıyor; r5.2 README'sinde
   aynı ifadenin geçip geçmediği doğrulanmadı.
 
-## 8. Kayıt
+## 8. Koşu öncesi değişiklik kaydı
+
+- **8 Ekim 2026 — bellek planı:** "1000 kullanıcı + bütün insider'lar" yedeği iptal edildi. Yerine önce parça parça
+  işleme, gerekirse insider oranını koruyan tek oranlı katmanlı örnekleme geldi (§3). Gerekçe: eski yedek insider
+  oranını değiştirerek precision'ı şişirirdi. Bu değişiklik r5.2 indirilmeden ve tespit çıktısı üretilmeden yapıldı.
+
+## 9. Kayıt
 
 - Çıktılar: `C:\data\ztp_out\kor_r52\`. Repo dışında tutulur.
 - `sonuclar.json` dosyası şunları içerir: freeze kontrol çıktısı, HEAD karması, komut satırları, pencere listesi, LR
