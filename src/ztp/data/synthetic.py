@@ -12,6 +12,8 @@ import pandas as pd
 from ztp.data.dataset import Dataset
 from ztp.schema import CLOUD_APPS, EVENT_COLUMNS, OCSF_AUTH, OCSF_FILE, OCSF_HTTP, OCSF_NETWORK, OCSF_PROCESS
 
+# sabit varsayılan bitiş günü: sentetik regresyon koşu tarihine (bugüne) bağlı olmasın — aynı tohum her gün aynı sonucu verir
+SYNTHETIC_DEFAULT_END = pd.Timestamp("2026-09-16")
 WEEKDAY_FACTOR = {0: 1.15, 1: 1.0, 2: 1.0, 3: 1.0, 4: 0.9, 5: 0.35, 6: 0.35}  # 10.5 haftalık mevsimsellik
 DEPT_WEIGHTS = {"Finans": 0.14, "Muhasebe": 0.10, "IT": 0.16, "Satis": 0.20, "IK": 0.08, "ArGe": 0.20, "Operasyon": 0.12}
 APPS_BY_DEPT = {
@@ -113,7 +115,7 @@ class SyntheticOrg:
         self.rng = np.random.default_rng(seed)
         self.n_users, self.n_days, self.eval_days = n_users, n_days, eval_days
         self.honeytokens = honeytokens  # S10 tuzak senaryosu ve tuzak listesi (varsayılan kapalı: regresyon sayıları değişmesin)
-        self.end_day = (end_day or pd.Timestamp.utcnow().tz_localize(None)).normalize()
+        self.end_day = (end_day if end_day is not None else SYNTHETIC_DEFAULT_END).normalize()
         self.day0 = self.end_day - pd.Timedelta(days=n_days - 1)
         self.E0 = n_days - eval_days  # değerlendirme penceresinin ilk gün indeksi
         self.users: List[dict] = []
@@ -430,17 +432,22 @@ class SyntheticOrg:
         # S9 — NEGATİF KONTROL: kayıtlı izin dönüşü (9.3) — devamsızlık takvimi bilindiği için uyarı BEKLENMEZ
         s9 = self._pick("IK", used)
         used.add(s9["idx"])
-        for d in range(E0 - 20, E0 + 2):
+        # izin dönüşü iş gününe denk gelir: hafta sonu dönüş mesai dışı girişi (UEBA-0001) haklı olarak tetikler ve negatif
+        # kontrolün sonucu koşu tarihine bağlı kalırdı
+        r9 = E0 + 2
+        while self._day(r9).dayofweek >= 5:
+            r9 += 1
+        for d in range(E0 - 20, r9):
             ov[(s9["idx"], d)].update(inactive=True)
-        ov[(s9["idx"], E0 + 2)].update(bytes_mult=3.0, files_mult=3.0, force_active=True)
-        self.leaves.append(dict(sid=s9["sid"], start=self._day(E0 - 20), end=self._day(E0 + 1), tur="yillik_izin"))
+        ov[(s9["idx"], r9)].update(bytes_mult=3.0, files_mult=3.0, force_active=True)
+        self.leaves.append(dict(sid=s9["sid"], start=self._day(E0 - 20), end=self._day(r9 - 1), tur="yillik_izin"))
         self.ground_truth.append(
             dict(
                 senaryo="S9_kayitli_izin_donusu_NEGATIF",
                 aktor="Dikkatsiz/normal çalışan",
                 sid=s9["sid"],
-                baslangic=E0 + 2,
-                olay_gunu=E0 + 2,
+                baslangic=r9,
+                olay_gunu=r9,
                 teknikler=[],
                 beklenen=[],
                 negatif=True,
@@ -524,7 +531,10 @@ class SyntheticOrg:
         p_active = 0.97 if dow < 5 else 0.08
         if not ov.get("force_active") and not ov and rng.random() > p_active:
             return
-        season = WEEKDAY_FACTOR[dow] * (1.5 if u["dept"] in ("Finans", "Muhasebe") and day.day >= 27 else 1.0)
+        # senaryonun zorladığı gün (S8/S9 dönüşü) haftalık mevsimsellikle zayıflatılmaz: enjeksiyon şiddeti normal iş gününe
+        # göre tanımlıdır; aksi hâlde sonuç olay gününün hafta sonuna denk gelip gelmediğine (yani koşu tarihine) bağlı kalır
+        season = 1.0 if ov.get("force_active") else WEEKDAY_FACTOR[dow]
+        season *= 1.5 if u["dept"] in ("Finans", "Muhasebe") and day.day >= 27 else 1.0
         key = (u["sid"], d // 30)
         if key not in lease_cache:
             lease_cache[key] = self._lease_ip(leases, u["sid"], day)

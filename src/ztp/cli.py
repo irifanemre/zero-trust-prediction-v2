@@ -15,7 +15,7 @@ from ztp.ablation import format_ablation, run_ablation
 from ztp.config import TenantConfig
 from ztp.data.cert import CERT_PATH_ENV, load_cert_dataset, resolve_cert_dir
 from ztp.data.files import dataset_from_files
-from ztp.data.synthetic import SyntheticOrg
+from ztp.data.synthetic import SYNTHETIC_DEFAULT_END, SyntheticOrg
 from ztp.detection.catalog import load_catalog
 from ztp.detection.testing import run_rule_tests
 from ztp.feedback import FP_REASONS, LabelStore
@@ -84,7 +84,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="sentetik veriye tuzak varlıklar + S10 tuzak etkileşimi senaryosu ekle (aldatma katmanı)",
     )
-    ap.add_argument("--end", help="değerlendirme son günü (YYYY-MM-DD); varsayılan bugün")
+    ap.add_argument(
+        "--end",
+        help=f"değerlendirme son günü (YYYY-MM-DD); sentetikte varsayılan sabit {SYNTHETIC_DEFAULT_END.date()} (koşu tarihinden bağımsız)",
+    )
     ap.add_argument("--out", default="./ztp_out")
     ap.add_argument("--detections-dir", help="detection-as-code YAML dizini (yoksa gömülü katalog)")
     ap.add_argument("--llm", default="none", choices=["none", "ollama", "anthropic"])
@@ -115,7 +118,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.synthetic = True
         LOG.info("Kaynak belirtilmedi; sentetik veri kullanılıyor")
 
-    end = pd.Timestamp(args.end).normalize() if args.end else pd.Timestamp.utcnow().tz_localize(None).normalize()
+    end = pd.Timestamp(args.end).normalize() if args.end else SYNTHETIC_DEFAULT_END
     overrides = dict(
         tenant_id=args.tenant, alarm_budget_per_day=args.budget, llm_backend=args.llm, ollama_model=args.ollama_model
     )
