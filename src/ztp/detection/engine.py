@@ -33,13 +33,13 @@ def _as_float(v) -> float:
     return f
 
 
-def peer_severity_factor(ratio, absolute_floor: bool = False) -> float:
+def peer_severity_factor(ratio, absolute_floor: bool = False, neutral: float = PEER_NEUTRAL_RATIO) -> float:
     """Akran oranından şiddet çarpanı. `absolute_floor` (kritik varlık erişimi) varsa akran indirimi
     uygulanmaz — taban 1.0; bordro dosyası yemekhane menüsüyle aynı ağırlıkta kalmasın (12.4)."""
     r = _as_float(ratio)
     if math.isnan(r):
         return 1.0
-    f = math.log10(max(r, 0.1)) / math.log10(PEER_NEUTRAL_RATIO)
+    f = math.log10(max(r, 0.1)) / math.log10(neutral)
     f = min(max(f, PEER_FACTOR_MIN), PEER_FACTOR_MAX)
     return max(f, 1.0) if absolute_floor else f
 
@@ -91,7 +91,7 @@ class DetectionEngine:
         self.skipped_dq: Counter = Counter()
 
     @staticmethod
-    def severity(rule: dict, s: dict) -> float:
+    def severity(rule: dict, s: dict, neutral: float = PEER_NEUTRAL_RATIO) -> float:
         """13.2 Şiddet: sapmanın büyüklüğü sigmoid ile 0–1'e sıkıştırılır (ham z kullanılmaz; tek uç değer domine etmesin).
         `akran_olcekleyici` verilmişse akran oranı şiddeti ölçekler — tetiklemez (12.4 akran vetosu bulgusu)."""
         sd = rule["siddet"]
@@ -105,7 +105,7 @@ class DetectionEngine:
         if scaler:
             taban_sinyali = sd.get("olcekleyici_taban_sinyali")
             taban = _as_float(s.get(taban_sinyali)) >= 1.0 if taban_sinyali else False
-            v = float(v) * peer_severity_factor(s.get(scaler), taban)
+            v = float(v) * peer_severity_factor(s.get(scaler), taban, neutral)
         return sigmoid((float(v) - esik) / max(sd["olcek"], EPS))
 
     def _suppressed(self, rule: dict, s: dict, day: pd.Timestamp, sid: str, pseudo: str) -> Optional[str]:
@@ -175,7 +175,7 @@ class DetectionEngine:
                 rule["ad"],
                 rule["katman"],
                 day,
-                self.severity(rule, signals),
+                self.severity(rule, signals, self.cfg.peer_neutral_ratio),
                 float(rule["agirlik"]),
                 rule["attack"],
                 ev,

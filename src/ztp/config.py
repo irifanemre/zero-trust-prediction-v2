@@ -71,6 +71,8 @@ class TenantConfig:
     peer_context: bool = True  # 9.2 akran ağırlığı (False → yalnızca kişisel baseline; yeni hesapta akran zorunlu kalır)
     # 14.6 "model skoru kural skorunu ezmez, ona eklenir": öğrenen modelin 7g olasılığı ham skora bu ağırlıkla eklenir (0 = kapalı)
     prediction_weight: float = 0.0
+    # 13.2 / ADR-015 akran çarpanının nötr noktası: akran oranı bu kattayken şiddet çarpanı 1,0 (1.1'deki VE eşiği 5×)
+    peer_neutral_ratio: float = 5.0
     # aldatma katmanı: tuzak varlıklar {hesaplar: [...], kaynaklar: [fnmatch kalıpları], cihazlar: [...]} — meşru kullanımı yok,
     # her etkileşim deterministik kritik tespit (13.5 tek-sinyal istisnası); boş → katman kapalı
     honeytokens: Dict[str, List[str]] = field(default_factory=dict)
@@ -86,6 +88,8 @@ class TenantConfig:
             raise ValueError("füzyon ağırlıkları toplamı 1 olmalı")
         if self.llm_backend not in ("none", "ollama", "anthropic"):
             raise ValueError("llm_backend: none | ollama | anthropic")
+        if self.peer_neutral_ratio <= 1.0:
+            raise ValueError("peer_neutral_ratio > 1 olmalı (log ölçeğinde nötr nokta)")
         if self.llm_on_injection not in ("template", "sanitized"):
             raise ValueError("llm_on_injection: template | sanitized")
         self.available_sources = tuple(self.available_sources)

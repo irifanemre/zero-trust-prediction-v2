@@ -1,0 +1,4 @@
+# Bilgi tabanı bütünlüğü (MANIFEST.sha256) bayt-bayt doğrulandığı için bu dosyalar
+# her platformda LF satır sonuyla kalmalı; Windows'ta CRLF'ye çevrilirse hash tutmaz.
+src/ztp/reporting/knowledge/*.yaml       text eol=lf
+src/ztp/reporting/knowledge/MANIFEST.sha256 text eol=lf
