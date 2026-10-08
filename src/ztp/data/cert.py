@@ -216,7 +216,11 @@ def load_cert_dataset(
         ins = pd.read_csv(insiders_path)
         ins = ins[ins["dataset"].astype(str) == release]
         for r in ins.itertuples(index=False):
-            s0, s1 = pd.to_datetime(r.start, format="mixed"), pd.to_datetime(r.end, format="mixed")
+            s0 = pd.to_datetime(r.start, format="mixed", errors="coerce")
+            s1 = pd.to_datetime(r.end, format="mixed", errors="coerce")
+            if pd.isna(s0) or pd.isna(s1):  # resmi cevap anahtarında bozuk tarih var (r6.2 CDE1846: "/21/2011"); sessizce düşmez
+                LOG.warning("Cevap anahtarı satırı değerlendirilemedi (tarih okunamadı): %s S%s %r–%r", r.user, r.scenario, r.start, r.end)
+                continue
             if s1 < start - 7 * DAY or s0 > end + 7 * DAY:
                 continue
             m = CERT_SCENARIO_MAP.get(int(r.scenario), dict(aktor="?", teknikler=[], beklenen=[]))
@@ -244,6 +248,15 @@ def load_cert_dataset(
         directory = directory[directory["sid"].isin(users)].reset_index(drop=True)
 
     # ---- log dosyaları (parça parça, pencere filtresi, vektörel dönüşüm) -------------------------------------------
+    def header(name: str) -> List[str]:
+        """Dosyanın başlık kolonları (başlıksız ya da yoksa boş) — sürüme özgü alanların varlığı buradan anlaşılır."""
+        p = base / name
+        if not p.exists():
+            return []
+        with open(p, encoding="utf-8", errors="ignore") as fh:
+            first = fh.readline().strip().lower()
+        return [c.strip() for c in first.split(",")] if first.startswith("id,") else []
+
     def read_window(name: str, cols: List[str]) -> pd.DataFrame:
         p = base / name
         if not p.exists():
@@ -322,7 +335,11 @@ def load_cert_dataset(
             )
         )
         del ht
-    em = read_window("email.csv", ["id", "date", "user", "pc", "to", "cc", "bcc", "size", "attachments"])
+    em_cols = ["id", "date", "user", "pc", "to", "cc", "bcc", "size", "attachments"]
+    em_activity = "activity" in header("email.csv")  # r5+: Send/View… — yalnız gönderim r4.2'deki anlamla aynı
+    em = read_window("email.csv", em_cols + (["activity"] if em_activity else []))
+    if em_activity and len(em):
+        em = em[em["activity"].str.strip().str.lower().eq("send")].reset_index(drop=True)
     if len(em):
         rcpt = (em["to"].fillna("") + ";" + em["cc"].fillna("") + ";" + em["bcc"].fillna("")).str.lower()
         # dış alıcı: dtaa.com dışında en az bir adres
@@ -338,7 +355,12 @@ def load_cert_dataset(
                 bytes_out=pd.to_numeric(em["size"], errors="coerce").fillna(0).astype(int).values,
             )
         )
-    fl = read_window("file.csv", ["id", "date", "user", "pc", "filename", "content"])
+    fl_cols = ["id", "date", "user", "pc", "filename", "content"]
+    # r5+: file.csv her tür dosya işlemidir; r4.2'deki "taşınabilir medyaya kopya" anlamı yalnız to_removable_media=True
+    fl_removable = "to_removable_media" in header("file.csv")
+    fl = read_window("file.csv", fl_cols + (["to_removable_media"] if fl_removable else []))
+    if fl_removable and len(fl):
+        fl = fl[fl["to_removable_media"].str.strip().str.lower().eq("true")].reset_index(drop=True)
     if len(fl):
         ext_ = fl["filename"].str.extract(r"\.([A-Za-z0-9]+)$")[0].fillna("bin").str.lower()
         # r4.2 file.csv = taşınabilir medyaya dosya kopyası; dosya adı saklanmaz, uzantı kategori olur (20.1 veri minimizasyonu)
