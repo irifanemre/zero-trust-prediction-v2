@@ -41,8 +41,20 @@ FROZEN_CODE = (
 )
 # kural davranışını değiştirmeyen alanlar (LLM, yollar, gizli anahtar, entegrasyon) değer özetine girmez
 NON_BEHAVIOUR_FIELDS = {
-    "tenant_id", "llm_backend", "ollama_model", "ollama_url", "anthropic_model", "rag_enabled", "llm_on_injection",
-    "llm_max_field_len", "pseudonym_secret", "state_file", "sinks", "suppressions", "honeytokens", "critical_assets",
+    "tenant_id",
+    "llm_backend",
+    "ollama_model",
+    "ollama_url",
+    "anthropic_model",
+    "rag_enabled",
+    "llm_on_injection",
+    "llm_max_field_len",
+    "pseudonym_secret",
+    "state_file",
+    "sinks",
+    "suppressions",
+    "honeytokens",
+    "critical_assets",
 }
 
 

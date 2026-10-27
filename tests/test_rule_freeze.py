@@ -6,7 +6,6 @@ eski manifest silinmez. Kör koşu sonucu görüldükten sonra yeni sürüm, o k
 """
 
 import json
-from pathlib import Path
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 

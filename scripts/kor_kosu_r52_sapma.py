@@ -34,7 +34,7 @@ NEW_SPLIT = REPO / "configs" / "splits" / "cert-r5.2-orneklem-bolmesi.json"
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="C:/data/ztp_out/kor_r52")
+    ap.add_argument("--out", default="./ztp_out/kor_r52")
     args = ap.parse_args()
     out = Path(args.out)
     users = json.loads(SAMPLE.read_text(encoding="utf-8"))["kullanicilar"]

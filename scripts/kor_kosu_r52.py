@@ -346,7 +346,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cert-dir", required=True)
     ap.add_argument("--answers-dir")
-    ap.add_argument("--out", default="C:/data/ztp_out/kor_r52")
+    ap.add_argument("--out", default="./ztp_out/kor_r52")
     ap.add_argument("--split", default=str(SPLIT))
     ap.add_argument(
         "--orneklem", help="kullanıcı örneklemi dosyası (r5.2 için varsayılan: configs/splits/cert-r5.2-orneklem.json)"

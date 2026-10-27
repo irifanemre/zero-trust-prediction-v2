@@ -290,7 +290,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("komut", choices=["r42-model", "r52-sayim", "r52-bolme", "r52-orneklem"])
     ap.add_argument("--cert-dir", required=True)
-    ap.add_argument("--out", default="C:/data/ztp_out/kor_r52_hazirlik")
+    ap.add_argument("--out", default="./ztp_out/kor_r52_hazirlik")
     args = ap.parse_args()
     Path(args.out).mkdir(parents=True, exist_ok=True)
     logging.basicConfig(

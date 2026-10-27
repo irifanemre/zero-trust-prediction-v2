@@ -137,8 +137,8 @@ katmanı (#18–20) çalışmaya devam eder. Doküman 12.4'e eklenen sınır bu 
 
 ### CERT r5.2 kör koşu (27 Ekim 2026)
 
-Kurallar `kurallar-donduruldu-v1` ile, ayar sırasında hiç görülmemiş veride tek koşu. Ayrıntı ve sapma kaydı:
-[kor-kosu-r52-sonuc.md](kor-kosu-r52-sonuc.md).
+Kurallar `kurallar-donduruldu-v1` ile, ayar sırasında hiç görülmemiş veride tek koşu. 70/15/15 grup bazında karşılaştırma ve sapma kaydı:
+[cert-r42-r52-karsilastirma.md](cert-r42-r52-karsilastirma.md).
 
 - Yakalama (değerlendirilebilir): **25/30 (0,83)**; r4.2'de 18/20 (0,90). Yeni senaryo türü S4: 4/4.
 - precision@1 **0,20** (r4.2: 0,40); erkenlik medyanı 9 gün (r4.2: 8).

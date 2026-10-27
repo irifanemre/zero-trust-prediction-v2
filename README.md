@@ -61,7 +61,7 @@ ztp --synthetic --ablation                         # 19.5: prediction / ilişkis
 ztp --synthetic --honeytokens                      # aldatma katmanı: tuzak varlıklar + S10 tuzak etkileşimi senaryosu
 ztp --synthetic --state --days 30                  # toplu ısınma + durum kaydı, ardından günlük servis:
 ztp --daily 2026-09-17 --events gun.parquet --directory dizin.csv --config musteri.yaml --out ./ztp_out
-pytest                                             # 82 test (~3 dk; uçtan uca, güvenlik ve toplu≡artımlı eşdeğerlik testleri dahil)
+pytest                                             # 117 test (~3 dk; uçtan uca, güvenlik ve toplu≡artımlı eşdeğerlik testleri dahil)
 ```
 
 Çıktılar `ztp_out/<tenant>/` altında: `queue_<gün>.txt` (analist kuyruğu), `cases/*.json`, `metrics.json`,
@@ -113,9 +113,9 @@ sabit eşik yerine kapasite tabanlı kuyruk tasarımının bilinçli sonucudur v
 Prediction katmanı (7 günlük olasılık), aynı veride zamansal holdout ile: sezgisel model AUC 0,61 → öğrenen model
 **AUC 0,86, ECE 0,002** (Brier 0,0081 ≈ taban 0,0084). Ablasyon: akran bağlamı kapatılınca kapsama 16→13/26;
 prediction ve ilişkisel kurallar bu veride fark yaratmadı (İK sinyali yok) — ölçüldü ve belgelendi, saklanmadı. Ayrıntılar ve sınırlar: [docs/bulgular.md](docs/bulgular.md). Önemli uyarı: kurallar r4.2 sonuçları
-görüldükten sonra ayarlanmıştır; yansız rakam için henüz bakılmamış bir sürümde (r5.2/r6.2) tekrar gerekir.
+görüldükten sonra ayarlanmıştır; yansız rakam için henüz bakılmamış bir sürümde tekrar gerekiyordu — r5.2 kör koşusu aşağıda.
 
-**r5.2 kör koşu** (kurallar dondurulmuş, tek koşu; 1102 kullanıcılık katmanlı örneklem, 56 insider, 360 gün): değerlendirilebilir yakalama **25/30 (0,83)**, ayarda hiç görülmemiş S4 senaryosu 4/4, precision@1 **0,20**, erkenlik medyanı 9 gün. r4.2'de eğitilen öğrenen model r5.2'ye taşınmadı (AUC 0,69). Ayrıntılar ve sapma kaydı: [docs/kor-kosu-r52-sonuc.md](docs/kor-kosu-r52-sonuc.md).
+**r5.2 kör koşu** (kurallar dondurulmuş, tek koşu; 1102 kullanıcılık katmanlı örneklem, 56 insider, 360 gün): değerlendirilebilir yakalama **25/30 (0,83)**, ayarda hiç görülmemiş S4 senaryosu 4/4, precision@1 **0,20**, erkenlik medyanı 9 gün. r4.2'de eğitilen öğrenen model r5.2'ye taşınmadı (AUC 0,69). 90 günlük pencere başına yanlış alarm alan normal kullanıcı r4.2'de %26, r5.2'de %24. 70/15/15 grup bazında karşılaştırma ve sapma kaydı: [docs/cert-r42-r52-karsilastirma.md](docs/cert-r42-r52-karsilastirma.md).
 
 ## Tespit kataloğu (`src/ztp/detection/rules/`)
 
@@ -161,7 +161,8 @@ Ek D.2; prediction katmanının kalibrasyon ölçümü, öğrenen model ve ablas
   `python scripts/build_pdf.py docs/mimari-dokuman.md docs/Zero_Trust_Prediction_Mimari_v1.2.pdf`.
 - [docs/bulgular.md](docs/bulgular.md) — mimari ↔ uygulama denetiminin bulguları (ne beklendi, ne bulundu, yapılan
   değişiklik, önce/sonra ölçümü) ve CERT r4.2 doğrulaması (veri eşlemesi, sonuçlar, sınırlar).
-- [docs/kor-kosu-r52-sonuc.md](docs/kor-kosu-r52-sonuc.md) — CERT r5.2 kör koşu sonucu, r4.2 ile karşılaştırma, sapma kaydı.
+- [docs/cert-r42-r52-karsilastirma.md](docs/cert-r42-r52-karsilastirma.md) — CERT r4.2 ve r5.2'nin 70/15/15 (eğitim / doğrulama / test)
+  karşılaştırması: kural sistemi, öğrenen model, kural sağlığı, kör koşu ve sapma kaydı.
 
 ## Bilinen sınırlar
 
