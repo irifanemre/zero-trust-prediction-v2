@@ -127,3 +127,49 @@ Bunlar hipotez, başarı eşiği değil. Sonuç ne çıkarsa çıksın olduğu g
 - Çıktılar: `C:\data\ztp_out\kor_r52\`. Repo dışında tutulur.
 - `sonuclar.json` dosyası şunları içerir: freeze kontrol çıktısı, HEAD karması, komut satırları, pencere listesi, LR
   model sha256'sı ve bu belgenin commit karması.
+
+## 10. Koşu öncesi ekler (27 Ekim 2026, r5.2'de tespit çıktısı üretilmeden önce)
+
+Bu bölüm §3 ve §4.6'nın koşudan önce belgeye eklenmesini istediği değerleri kaydeder. r5.2'de bu tarihe kadar yalnız
+başlıklar, README, LDAP kullanıcı listesi, cevap anahtarı ve yükleyici filtreleriyle gün gün satır sayımı okundu.
+
+**Veri (indirme sonrası doğrulama):** `r5.2.tar.bz2` 27 dosya, 40,18 GB, boyut uyuşmazlığı yok. Satır sayıları: logon
+1.810.070 · device 836.984 (Connect 419.734) · http 58.960.449 · email 17.361.575 (Send 5.555.187) · file 887.621
+(`to_removable_media = True` 403.966). LDAP: 18 aylık dosya (2009-12 … 2011-05), 2000 kullanıcı; kolon adları r4.2 ile
+aynı, eşleme gerekmedi. Cevap anahtarında 99 insider (S1 29, S2 30, S3 10, S4 30). r5.2 README'sinde "dense needles"
+ifadesi geçmiyor ("This data contains four instances of insider threats" — dört senaryo türü).
+
+**Pencere (§3, mekanik):** D0 = 2010-01-02, D1 = 2011-06-02; değerlendirme dönemi 2010-04-23 … 2011-06-02. Koşulan
+pencereler: 2010-06-08 – 2010-09-05, 2010-09-06 – 2010-12-04, 2010-12-05 – 2011-03-04, 2011-03-05 – 2011-06-02. Atlanan:
+2010-03-10 – 2010-06-07 (başlangıcı D0 + 111'den önce). Bitişi atlanan dönemde kalan senaryolar "ölçülmedi" olarak sayılır.
+
+**Bellek ve örnekleme (§3.1–3.2):** r4.2 tam koşusu (1000 kullanıcı, 13.261.768 olay) tepe 10,65 GB → olay başına
+803,1 bayt. r5.2 pencere başına olay (111 günlük tarihçe dahil): 27.153.265 / 26.390.067 / 25.696.323 / 24.512.873 →
+en büyük pencerenin tahmini tepesi 21,81 GB > 12 GB. Parça parça işleme yetmiyor; **f = 0,55** (12 / 21,81 = 0,550,
+0,05'lik adımla aşağı). Örneklem `configs/splits/cert-r5.2-orneklem.json`
+(sha256 `607770ff795f941c0535c60c3a7f71111f68ed9758d06c00183f913753bd9d7b`): her katmandan floor(f·n + 0,5), tohum 42 —
+S1 16/29, S2 17/30, S3 6/10, S4 17/30, benign 1046/1901; toplam 1102 kullanıcı, 56 insider, insider oranı %5,08
+(nüfusta %4,95). Yükleyiciye örneklem için `only_users` parametresi eklendi; varsayılanı davranışı değiştirmez,
+`max_users` kullanılmaz.
+
+**Birincil LR modeli (§4.6):** `configs/models/kor-r52-birincil-lr.json`
+(sha256 `9dca8b3766a2bfcb024669e5214ec325624195c2aaab86b7a102d945b1345bb2`). C = 0,001; r4.2 tamamlayıcı protokolünün
+eğitim parçası (669 kullanıcı, tüm günler, 50.718 satır, 525 pozitif); eşik 0,1173 (doğrulama parçasında en iyi F1).
+Yeniden üretim kontrolü: r4.2 test parçasında AUC 0,84, ECE 0,0014, F1 0,076 — eski koşuyla birebir aynı. Aynı r4.2
+koşusunda kapsama 26 GEÇTİ (kabul ölçütü §2 yeniden doğrulandı).
+
+**İkincil bölme (§4.6):** `configs/splits/cert-r5.2-kullanici-bolmesi.json`
+(sha256 `3e5ea3264b00a92de39fd3e5b62e0cc6efc278da3a9ce454ebdc201cb5108f56`), 2000 kullanıcı üzerinden 1400/300/300,
+insider 69/15/15. Örneklem dışındaki kullanıcılar ikincil protokolde de yer almaz.
+
+**Sürücü ve pencereler arası birleştirme** (`scripts/kor_kosu_r52.py`; plan bu ayrıntıları açık bırakmıştı, koşudan önce
+sabitlendi): her pencere `cert_eval.py` ayarlarıyla koşulur. Senaryo, bitiş tarihini içeren pencerenin sonucu ile
+sayılır. precision@k sayaçları pencereler boyunca toplanır. Confusion matrix'te değerlendirilebilir senaryosu olmayan
+(kısmi ya da ölçülmeyen) insider matrise girmez; FP, herhangi bir pencerede kuyruğa girmiş insider olmayan kullanıcıdır.
+LR satırları yalnız her pencerenin değerlendirme günlerinden alınır (ısınma günleri bir önceki pencereyle çakışır).
+Kural sağlığı, değerlendirme günlerindeki canlı tetiklemeler ve gölge mod tetiklemeleri ayrı ayrı verilir. Sürücü,
+r5.2'den önce yalnız r4.2'nin son penceresinde sınandı.
+
+**Kural sağlığı tanımı (r4.2 karşılaştırması için):** r4.2 değerlendirme döneminde canlı tetiklenen 6 kural
+(UEBA-0001/0002/0005/0007/0017, PRED-0012) ve gölge modda tetiklenen 2 kural (UEBA-0009, UEBA-IF01); UEBA-0003 bu
+dönemde tetiklenmedi, DQ-0010 kaynak (EDR) olmadığı için devre dışı.

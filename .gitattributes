@@ -2,3 +2,7 @@
 # her platformda LF satır sonuyla kalmalı; Windows'ta CRLF'ye çevrilirse hash tutmaz.
 src/ztp/reporting/knowledge/*.yaml       text eol=lf
 src/ztp/reporting/knowledge/MANIFEST.sha256 text eol=lf
+# Kör koşu girdileri (model, bölme, örneklem, dondurma manifesti) sha256 ile plana bağlı: satır sonu sabit kalmalı.
+configs/models/*.json                    text eol=lf
+configs/splits/*.json                    text eol=lf
+configs/freeze/*.json                    text eol=lf

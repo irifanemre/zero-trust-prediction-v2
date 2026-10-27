@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -147,12 +147,20 @@ def _url_category(url: str) -> Optional[str]:
 
 
 def load_cert_dataset(
-    cert_dir: str, start: pd.Timestamp, end: pd.Timestamp, max_users: Optional[int] = None, answers_dir: Optional[str] = None
+    cert_dir: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    max_users: Optional[int] = None,
+    answers_dir: Optional[str] = None,
+    only_users: Optional[Sequence[str]] = None,
 ) -> Dataset:
     """CERT Insider Threat Test Dataset (r1 … r6.2) → OCSF-lite (19.2 birincil doğrulama kaynağı, ADR-004).
     Farklılıklar sürüme göre ele alınır: r1'de kullanıcı 'DTAA/XXX0001', http.csv başlıksız, LDAP kolonları büyük harf;
     r4.2+'da email.csv/file.csv/psychometric.csv vardır. psychometric.csv BİLİNÇLİ olarak okunmaz (4.2 etik sınır /
-    20.1 amaçla sınırlılık: kişilik/verimlilik verisi skorlamaya girmez)."""
+    20.1 amaçla sınırlılık: kişilik/verimlilik verisi skorlamaya girmez).
+
+    `only_users`: önceden seçilmiş kullanıcı örneklemi (ör. kör koşu planının katmanlı örneklemi); dizin, cevap anahtarı
+    ve loglar bu kullanıcılarla sınırlanır. `max_users`'tan farklı olarak insider'ları ayrıca korumaz."""
     base = Path(cert_dir)
     release = base.name.lstrip("r")
     t0 = time.perf_counter()
@@ -219,7 +227,9 @@ def load_cert_dataset(
             s0 = pd.to_datetime(r.start, format="mixed", errors="coerce")
             s1 = pd.to_datetime(r.end, format="mixed", errors="coerce")
             if pd.isna(s0) or pd.isna(s1):  # resmi cevap anahtarında bozuk tarih var (r6.2 CDE1846: "/21/2011"); sessizce düşmez
-                LOG.warning("Cevap anahtarı satırı değerlendirilemedi (tarih okunamadı): %s S%s %r–%r", r.user, r.scenario, r.start, r.end)
+                LOG.warning(
+                    "Cevap anahtarı satırı değerlendirilemedi (tarih okunamadı): %s S%s %r–%r", r.user, r.scenario, r.start, r.end
+                )
                 continue
             if s1 < start - 7 * DAY or s0 > end + 7 * DAY:
                 continue
@@ -238,6 +248,10 @@ def load_cert_dataset(
                 )
             )
     # ---- kullanıcı alt kümesi (varsa cevap anahtarındaki kullanıcılar korunur) -----------------------------------
+    if only_users is not None:
+        keep_set = set(only_users)
+        directory = directory[directory["sid"].isin(keep_set)].reset_index(drop=True)
+        gt = [g for g in gt if g["sid"] in keep_set]
     users = set(directory["sid"])
     if max_users and len(users) > max_users:
         keep = {g["sid"] for g in gt}

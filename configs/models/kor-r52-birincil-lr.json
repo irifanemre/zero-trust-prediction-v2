@@ -1,0 +1,89 @@
+{
+  "model": {
+    "version": "pred-lr-1",
+    "features": [
+      "risk_egim_7g",
+      "rejim_degisim_skoru",
+      "risk_ewma_kisa",
+      "risk_ewma_uzun",
+      "risk_pozitif_gun_7g",
+      "mevcut_yuzdelik",
+      "ayrilik_bildirimi",
+      "yetki_var",
+      "yeni_hesap",
+      "usb_7g_toplam",
+      "veri_hacmi_z",
+      "hacim_trend_14g",
+      "yeni_hassas_uygulama"
+    ],
+    "coef": [
+      -0.03384571168976463,
+      0.06614471308565091,
+      0.14799588405979255,
+      0.18949216379814213,
+      -0.01791247094746019,
+      0.05988870083904657,
+      0.0,
+      0.0,
+      0.0,
+      0.23351197258467876,
+      0.02756961068539562,
+      -0.0164608044393933,
+      -0.00010247115052587619
+    ],
+    "intercept": -4.7532509170104404,
+    "mean": [
+      -1.1665994401305467e-05,
+      0.00944049658400285,
+      0.05191331579374385,
+      0.04427858014154115,
+      0.24084151583264324,
+      0.1033423523232051,
+      0.0,
+      0.0,
+      0.0,
+      3.2901928309475927,
+      -0.00031897489425918826,
+      -1.6737734285838383e-05,
+      0.0034898852478410032
+    ],
+    "scale": [
+      0.107013378174577,
+      0.18453181145867298,
+      0.2648046970701194,
+      0.143497576650699,
+      0.9065652215312517,
+      0.2950234842965161,
+      1.0,
+      1.0,
+      1.0,
+      9.732547660736499,
+      0.006403559208653489,
+      0.005010456401042589,
+      0.05897207770459845
+    ],
+    "n_train": 50718,
+    "positives": 525,
+    "trained_at": "2026-10-27T09:30:11+00:00"
+  },
+  "C": 0.001,
+  "esik": 0.1173,
+  "egitim": {
+    "veri": "cert-r4.2; end=2010-11-30 days=90 warmup=21",
+    "bolme": "configs/splits/cert-r4.2-kullanici-bolmesi.json",
+    "protokol": "tamamlayıcı: eğitim parçasının kullanıcıları, tüm günler (embargo yok); eşik doğrulama parçasında en iyi F1",
+    "satir": 50718,
+    "pozitif": 525
+  },
+  "r42_test_kontrol": {
+    "n": 10956,
+    "pozitif": 98,
+    "taban_orani": 0.0089,
+    "brier": 0.0088,
+    "brier_taban": 0.0089,
+    "brier_beceri": 0.01,
+    "auc": 0.84,
+    "ece": 0.0014,
+    "f1_dogrulama_esiginde": 0.076
+  }
+}
