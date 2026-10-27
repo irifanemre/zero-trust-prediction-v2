@@ -115,6 +115,8 @@ Prediction katmanı (7 günlük olasılık), aynı veride zamansal holdout ile: 
 prediction ve ilişkisel kurallar bu veride fark yaratmadı (İK sinyali yok) — ölçüldü ve belgelendi, saklanmadı. Ayrıntılar ve sınırlar: [docs/cert-validation.md](docs/cert-validation.md). Önemli uyarı: kurallar r4.2 sonuçları
 görüldükten sonra ayarlanmıştır; yansız rakam için henüz bakılmamış bir sürümde (r5.2/r6.2) tekrar gerekir.
 
+**r5.2 kör koşu** (kurallar dondurulmuş, tek koşu; 1102 kullanıcılık katmanlı örneklem, 56 insider, 360 gün): değerlendirilebilir yakalama **25/30 (0,83)**, ayarda hiç görülmemiş S4 senaryosu 4/4, precision@1 **0,20**, erkenlik medyanı 9 gün. r4.2'de eğitilen öğrenen model r5.2'ye taşınmadı (AUC 0,69). Ayrıntılar ve sapma kaydı: [docs/kor-kosu-r52-sonuc.md](docs/kor-kosu-r52-sonuc.md).
+
 ## Tespit kataloğu (`src/ztp/detection/rules/`)
 
 UEBA-0001 mesai dışı aktivite · 0002 ilk kez görülen uygulama · 0003 anormal veri çıkışı · 0004 imkânsız seyahat ·

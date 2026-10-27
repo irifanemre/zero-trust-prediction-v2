@@ -132,3 +132,18 @@ kural mantığını kirletmez. Ölçümde görünürlüğü doğrulandı: `basti
 saldırgana dar bir pencere açar. Pencere izin kaydıyla sınırlıdır, sayılır ve raporlanır; bu
 pencerede erişim deseni kuralları (#4 imkânsız seyahat, #5 yeni cihaz/konum) ile aldatma
 katmanı (#18–20) çalışmaya devam eder. Doküman 12.4'e eklenen sınır bu boşluğu kapsar.
+
+---
+
+### CERT r5.2 kör koşu (27 Ekim 2026)
+
+Kurallar `kurallar-donduruldu-v1` ile, ayar sırasında hiç görülmemiş veride tek koşu. Ayrıntı ve sapma kaydı:
+[kor-kosu-r52-sonuc.md](kor-kosu-r52-sonuc.md).
+
+- Yakalama (değerlendirilebilir): **25/30 (0,83)**; r4.2'de 18/20 (0,90). Yeni senaryo türü S4: 4/4.
+- precision@1 **0,20** (r4.2: 0,40); erkenlik medyanı 9 gün (r4.2: 8).
+- 21 kuraldan 9'u tetiklendi (7 canlı + 2 gölge); r4.2'de 8 (6 + 2). Fark: UEBA-0003.
+- r4.2'de eğitilen LR modeli r5.2'ye taşınmadı (AUC 0,84 → 0,69, sezgiselin altında). r5.2'nin kendi verisiyle
+  eğitilen model AUC 0,91. Öğrenen model kurumun kendi etiketleriyle eğitilmeli.
+- Sapma: ikincil LR bölmesi örneklemle aynı tohum akışından üretildiği için geçersiz çıktı. Mekanik olarak düzeltildi
+  ve iki sonuç birlikte raporlandı.
