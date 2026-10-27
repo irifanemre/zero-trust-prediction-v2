@@ -33,6 +33,7 @@ class RiskScorer:
         self.hit_log: Dict[str, List[Hit]] = defaultdict(list)
         self.pool: deque = deque()  # (gün, ham skor) — son 90 günün tüm kullanıcı-günleri (sıfırlar dahil)
         self.last_queued: Dict[str, pd.Timestamp] = {}  # açık vaka: yeni kanıt gelmeden yeniden kuyruğa alınmaz
+        self.watch_by_day: Dict[pd.Timestamp, List[str]] = {}  # doğrulama kapısından geçemeyen adaylar (izleme listesi)
 
     def decay(self, age_days: int) -> float:
         """13.2 Zaman bozunumu: son 24 saat tam ağırlık; 7 gün öncesi 0.3."""
@@ -97,6 +98,18 @@ class RiskScorer:
                 or any(h.kritik for h in today)  # deterministik kanıt (ör. tuzak etkileşimi): tek sinyal, bütçeden bağımsız
             )
 
+    def corroborated(self, r: RiskResult) -> bool:
+        """v2 doğrulama kapısı: tek zayıf sinyal kuyruğa girmez. 7 günlük pencerede 2+ farklı kural, aynı sinyalin
+        `kuyruk_tekrar_gun` farklı günde tekrarı, güçlendirici çarpan (> 1), kritik ya da kurumun en uç skorları
+        (yüzdelik ≥ `kuyruk_kacis_yuzdelik`: tek ama çok güçlü sinyal) yeterlidir."""
+        return (
+            r.critical
+            or r.percentile >= self.cfg.kuyruk_kacis_yuzdelik
+            or any(v > 1 for v in r.multipliers.values())
+            or len({h.rule_id for h in r.hits}) >= 2
+            or len({h.day for h in r.hits}) >= self.cfg.kuyruk_tekrar_gun
+        )
+
     def select_queue(self, day: pd.Timestamp, results: Dict[str, RiskResult]) -> List[str]:
         """13.5 Alarm bütçesi: her gün en riskli N varlık-gün + kritik istisna (bütçeden bağımsız).
         Son 7 günde kuyruğa alınmış ve o günden beri YENİ tespiti olmayan kullanıcı tekrar sunulmaz (vaka zaten açık)."""
@@ -111,7 +124,11 @@ class RiskScorer:
         ranked = sorted((r for r in results.values() if r.raw > 0 and eligible(r)), key=lambda r: (-int(r.critical), -r.raw))
         # kritik istisna bütçeden BAĞIMSIZDIR: N sıralı vaka + tüm kritikler (kritik, sıradan vakanın yerini almaz)
         chosen = [r.sid for r in ranked if r.critical]
-        chosen += [r.sid for r in ranked if not r.critical][: self.cfg.alarm_budget_per_day]
+        normal = [r for r in ranked if not r.critical]
+        if self.cfg.kuyruk_dogrulama:
+            self.watch_by_day[day] = [r.sid for r in normal if not self.corroborated(r)]
+            normal = [r for r in normal if self.corroborated(r)]
+        chosen += [r.sid for r in normal][: self.cfg.alarm_budget_per_day]
         for sid in chosen:
             self.last_queued[sid] = day
         return chosen

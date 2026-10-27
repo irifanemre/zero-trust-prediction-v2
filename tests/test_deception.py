@@ -152,7 +152,8 @@ def _hit(rule, day, w, kritik=False):
 def test_critical_hit_bypasses_budget_and_survives_state_roundtrip(tmp_path):
     day = pd.Timestamp("2026-02-10")
     scorer = RiskScorer(TenantConfig(alarm_budget_per_day=1), KnowledgeGraph(), LabelStore(tmp_path / "l.json"))
-    scorer.add_hits("BIG", [_hit("UEBA-0003", day, 80.0)])  # bütçeyi tek başına dolduran yüksek skor
+    # bütçeyi tek başına dolduran yüksek skor (iki kural: doğrulama kapısından geçer, test yalnız bütçe istisnasını sınar)
+    scorer.add_hits("BIG", [_hit("UEBA-0003", day, 40.0), _hit("UEBA-0017", day, 40.0)])
     scorer.add_hits("HONEY", [_hit("HONEY-0018", day, 20.0, kritik=True)])
     for _ in range(50):  # yüzdelik havuzu: kritik yüzdelik eşiğine ulaşılmasın diye sıfırlar
         scorer.pool.append((day, 0.0))

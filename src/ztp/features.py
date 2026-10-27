@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ztp.deception import TOKEN_COLUMN
-from ztp.schema import OCSF_AUTH, OCSF_NETWORK, RECON_CMD_HINTS, RECON_PROCESSES, haversine_km
+from ztp.schema import OCSF_AUTH, OCSF_NETWORK, RECON_CMD_HINTS, RECON_PROCESSES, SENSITIVE_APPS, haversine_km
 
 NUM_FEATURES = [
     "event_count",
@@ -74,10 +74,13 @@ def extract_features(ev_all: pd.DataFrame, critical_assets: Sequence[str]) -> pd
     f["recon_process_count"] = ev[ev["is_recon"]].groupby(keys).size()
     f["usb_count"] = ev[(ev["source"] == "dlp") & (ev["action"] == "usb_copy")].groupby(keys).size()
     f["distinct_apps_n"] = ev[ev["app"].notna()].groupby(keys)["app"].nunique()
+    # v2: hassas kategori (iş arama, bulut depolama, saldırı aracı) KULLANIM SAYISI — "ilk kez" sinyali, kategoriyi
+    # zaten kullanan kişide artışı göremiyordu (CERT r5.2 S2). NUM_FEATURES dışında: IF ve akran kıyası değişmez.
+    f["sensitive_app_count"] = ev[ev["app"].isin(SENSITIVE_APPS)].groupby(keys).size()
     # aldatma katmanı: tuzak etkileşimi sayımı baseline'a GİRMEZ (NUM_FEATURES dışında) — deterministik sinyal
     has_token = ev[TOKEN_COLUMN].notna() if TOKEN_COLUMN in ev.columns else pd.Series(False, index=ev.index)
     f["honeytoken_count"] = ev[has_token].groupby(keys).size()
-    count_cols = [c for c in NUM_FEATURES if c in f.columns] + ["file_offhours_ratio", "honeytoken_count"]
+    count_cols = [c for c in NUM_FEATURES if c in f.columns] + ["file_offhours_ratio", "honeytoken_count", "sensitive_app_count"]
     f[count_cols] = f[count_cols].fillna(0)
     # kümeler + kanıt (olay kimlikleri) + imkânsız seyahat: numpy döngüsü (varlık-gün başına ~15 olay)
     idx = g.indices

@@ -1,6 +1,6 @@
 """Kural dondurma manifesti — kör koşudan önce tespit davranışını belirleyen dosya ve değerlerin kaydı.
 
-Dondurulan küme: 21 kural YAML'ı + tespit/skorlama/profil kodu (dosya hash'i) ve okunur değer özeti. CERT ayrıştırıcısı
+Dondurulan küme: tüm kural YAML'ları (v1: 21, v2: 22) + tespit/skorlama/profil kodu (dosya hash'i) ve okunur değer özeti. CERT ayrıştırıcısı
 (`data/cert.py`) dosya olarak dondurulmaz — yeni sürüm biçimine uyarlanabilsin diye — ama URL kategorileri değer olarak
 dondurulur (uygulama sınıflandırması tespiti doğrudan etkiler). Hash'ler satır sonundan bağımsızdır (CRLF → LF), aynı
 içerik her makinede aynı hash'i verir.

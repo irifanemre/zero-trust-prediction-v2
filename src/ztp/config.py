@@ -17,6 +17,13 @@ class TenantConfig:
     # 13.5 Alarm bütçesi: N = analist kapasitesi (sabit eşik YOK — ADR-005)
     alarm_budget_per_day: int = 8
     critical_percentile: float = 0.999  # 13.5 kritik eşik istisnası (bütçeden bağımsız)
+    # v2 doğrulama kapısı: bütçe hedef değil üst sınır — tek kuralın tek seferlik sinyali analiste değil izleme listesine
+    # gider. Kuyruk için: 2+ farklı kural, aynı sinyalin kuyruk_tekrar_gun farklı günde tekrarı, güçlendirici çarpan ya da
+    # kritik; tek ama çok güçlü sinyal kurum yüzdeliği kuyruk_kacis_yuzdelik'i aşarsa yine geçer. CERT r5.2 eğitim
+    # parçasında yanlış alarm alan kullanıcı 331 → 120, yakalanan insider 29 → 27 (doğrulama: 56 → 15, 6 → 6).
+    kuyruk_dogrulama: bool = True
+    kuyruk_tekrar_gun: int = 3
+    kuyruk_kacis_yuzdelik: float = 0.998
     # 9.2 / 10.4 pencereler
     short_window_days: int = 7
     long_window_days: int = 90

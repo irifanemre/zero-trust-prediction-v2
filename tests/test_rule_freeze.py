@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v1.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v2.json"
 
 
 def test_rules_match_frozen_manifest():
@@ -20,8 +20,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 21
-    assert m["etiket"] == "kurallar-donduruldu-v1"
+    assert len(m["degerler"]["kurallar"]) == 22  # v2: UEBA-0021 eklendi
+    assert m["etiket"] == "kurallar-donduruldu-v2"
 
 
 def test_hash_ignores_line_endings(tmp_path):

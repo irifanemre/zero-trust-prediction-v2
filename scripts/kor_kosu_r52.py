@@ -53,9 +53,9 @@ def git(*a: str) -> str:
     return subprocess.run(["git", *a], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def freeze_check() -> str:
+def freeze_check(manifest: Path = FREEZE) -> str:
     r = subprocess.run(
-        [sys.executable, "-m", "ztp.freeze", "--check", str(FREEZE)], cwd=REPO, capture_output=True, text=True, encoding="utf-8"
+        [sys.executable, "-m", "ztp.freeze", "--check", str(manifest)], cwd=REPO, capture_output=True, text=True, encoding="utf-8"
     )
     out = (r.stdout + r.stderr).strip()
     if r.returncode != 0 or "donmuş durumla aynı" not in out:
@@ -277,7 +277,8 @@ def fmt(v) -> str:
 def write_summary(res: dict, out: Path) -> None:
     (out / "sonuclar.json").write_text(json.dumps(res, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     md = [
-        f"# CERT {res['kayit']['surum']} kör koşu — özet" + (" (SINAMA)" if res["kayit"]["sinama"] else ""),
+        f"# CERT {res['kayit']['surum']} {res['kayit'].get('tur', 'kör koşu')} — özet"
+        + (" (SINAMA)" if res["kayit"]["sinama"] else ""),
         "",
         f"- HEAD: `{res['kayit']['head']}`  plan: `{res['kayit']['plan_commit']}`",
         f"- Dondurma: {res['kayit']['freeze']}",
@@ -351,6 +352,8 @@ def main() -> int:
         "--orneklem", help="kullanıcı örneklemi dosyası (r5.2 için varsayılan: configs/splits/cert-r5.2-orneklem.json)"
     )
     ap.add_argument("--devam", action="store_true", help="teknik hatadan sonra biten pencereleri atla")
+    ap.add_argument("--dondurma", default=str(FREEZE), help="kural dondurma manifesti (v2 geliştirme koşusu için v2)")
+    ap.add_argument("--tur", default="kör koşu", help="koşu türü etiketi (ör. 'geliştirme koşusu (70/15/15)')")
     ap.add_argument("--sinama", action="store_true", help="sürücü sınaması (r4.2): yalnız son pencere, temiz ağaç şartı yok")
     args = ap.parse_args()
     args.answers_dir = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
@@ -370,7 +373,9 @@ def main() -> int:
         sys.exit("Çalışma ağacında commit edilmemiş değişiklik var — kör koşu commit edilmiş durumdan koşulur.")
     res = dict(
         kayit=dict(
-            freeze=freeze_check(),
+            freeze=freeze_check(Path(args.dondurma)),
+            dondurma=Path(args.dondurma).name,
+            tur=args.tur,
             head=git("rev-parse", "HEAD"),
             etiketler=git("tag", "--points-at", "HEAD").split(),
             plan_commit=git("log", "-1", "--format=%H", "--", str(PLAN.relative_to(REPO))),

@@ -110,7 +110,7 @@ def _hit(rule, day, w=5.0, sev=0.8, attack=("T1078",)):
 
 
 def test_scoring_decay_multipliers_and_budget(tmp_path):
-    cfg = TenantConfig(alarm_budget_per_day=2)
+    cfg = TenantConfig(alarm_budget_per_day=2, kuyruk_dogrulama=False)  # bütçe mekanizması; kapı ayrı testte
     scorer = RiskScorer(cfg, KnowledgeGraph(), LabelStore(tmp_path / "labels.json"))
     day = pd.Timestamp("2026-02-10")
     assert scorer.decay(0) == 1.0 and scorer.decay(7) == pytest.approx(0.3)
@@ -133,6 +133,22 @@ def test_scoring_decay_multipliers_and_budget(tmp_path):
     results2 = {s: scorer.compute(s, day + pd.Timedelta(days=1), {}) for s in "ABCD"}
     scorer.calibrate(day + pd.Timedelta(days=1), results2)
     assert "A" not in scorer.select_queue(day + pd.Timedelta(days=1), results2)
+
+
+def test_corroboration_gate_sends_single_weak_signal_to_watch_list(tmp_path):
+    scorer = RiskScorer(TenantConfig(alarm_budget_per_day=10), KnowledgeGraph(), LabelStore(tmp_path / "labels.json"))
+    day = pd.Timestamp("2026-02-10")
+    scorer.add_hits("TEK", [_hit("R1", day)])  # tek kural, tek gün → izleme listesi
+    scorer.add_hits("IKI_KURAL", [_hit("R1", day), _hit("R2", day)])
+    scorer.add_hits("TEKRAR", [_hit("R1", day - pd.Timedelta(days=d)) for d in (0, 2, 4)])  # aynı sinyal 3 farklı gün
+    scorer.add_hits("IKI_GUN", [_hit("R1", day - pd.Timedelta(days=d)) for d in (0, 2)])  # 2 gün yetmez
+    results = {s: scorer.compute(s, day, {}) for s in ("TEK", "IKI_KURAL", "TEKRAR", "IKI_GUN")}
+    scorer.calibrate(day, results)
+    assert set(scorer.select_queue(day, results)) == {"IKI_KURAL", "TEKRAR"}  # bütçe boş kalsa da doldurulmaz
+    assert set(scorer.watch_by_day[day]) == {"TEK", "IKI_GUN"}
+    # tek ama kurumun en uç skoru: kaçış yüzdeliğini aşınca kapıdan geçer
+    results["TEK"].percentile = 0.9985
+    assert "TEK" in scorer.select_queue(day + pd.Timedelta(days=1), {"TEK": results["TEK"]})
 
 
 def test_previously_labeled_false_positive_pattern_dampens_score(tmp_path):

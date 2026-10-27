@@ -1,0 +1,45 @@
+id: UEBA-0021
+ad: Hassas kategori kullanımında artış (iş arama / bulut depolama)
+surum: '1.0'
+durum: yayinda
+katman: UEBA
+attack: []
+fp_riski: orta
+veri_kaynaklari:
+- proxy
+mantik:
+  pencere: 1d
+  kosullar:
+  - hassas_7g_toplam >= 5
+  - hassas_7g_p < 0.001
+siddet:
+  sinyal: hassas_7g_p
+  esik: 0.05
+  olcek: 2.0
+  donusum: log10
+agirlik: 4
+bastirma:
+- servis_hesaplari
+sahip: guvenlik-operasyon
+runbook: RB-UEBA-0021
+kanit: []
+test_senaryolari:
+- ad: alisik_kullanicida_belirgin_artis
+  beklenen: true
+  sinyaller:
+    hassas_7g_toplam: 21
+    hassas_7g_p: 1.0e-06
+- ad: alisik_kullanici_normal_hafta
+  beklenen: false
+  sinyaller:
+    hassas_7g_toplam: 30
+    hassas_7g_p: 0.4
+- ad: kucuk_sayim
+  beklenen: false
+  sinyaller:
+    hassas_7g_toplam: 3
+    hassas_7g_p: 1.0e-05
+notlar: 'v2 (kurallar-donduruldu-v2): CERT r5.2 eğitim parçasındaki S2 kaçırmalarından. Kaçırılan iş arama
+  insider''ları kategoriyi senaryodan aylar önce de kullanıyordu; UEBA-0002 "ilk kez" olduğu için sessiz kaldı.
+  ATT&CK eşleşmesi yok (iş arama bir teknik değildir) — farklı-taktik çarpanına bilerek katılmaz. Eşikler
+  UEBA-0017 ile aynı kalıp (p < 0,001), veriye göre ayarlanmadı. Üretimde 13.6 gölge mod protokolünden geçer.'

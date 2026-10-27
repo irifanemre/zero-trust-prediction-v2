@@ -155,7 +155,16 @@ class ProfileEngine:
         p_mad = (hist[NUM_FEATURES] - gp[NUM_FEATURES].transform("median")).abs().groupby(hist["sid"]).median()
         p_var = gp[NUM_FEATURES].var().fillna(0)
         p_sum = gp["usb_count"].sum()
-        w6_sum = hist[hist["day"] >= day - 6 * DAY].groupby("sid")[["usb_count", "files_accessed", "bytes_out"]].sum()
+        w6_cols = ["usb_count", "files_accessed", "bytes_out"] + (
+            ["sensitive_app_count"] if "sensitive_app_count" in hist else []
+        )
+        w6_sum = hist[hist["day"] >= day - 6 * DAY].groupby("sid")[w6_cols].sum()
+        # v2: hassas kategori kullanımının kişisel ortalama/varyansı (sayım aşırı dağınık → negatif binom)
+        p_sens = (
+            gp["sensitive_app_count"].agg(["mean", "var"]).fillna(0)
+            if "sensitive_app_count" in hist
+            else pd.DataFrame(columns=["mean", "var"])
+        )
         peer_foreign_rate = hist.groupby("peer")["foreign_device_flag"].mean().to_dict()
         p_n = gp.size()
         gs = short.groupby("sid")
@@ -208,6 +217,7 @@ class ProfileEngine:
         )
         ctx.p_sum = p_sum
         ctx.w6_sum = w6_sum
+        ctx.p_sens = p_sens
         ctx.peer_foreign_rate = peer_foreign_rate
         return ctx
 
@@ -419,6 +429,16 @@ class ProfileEngine:
         new_sens = (new_p & SENSITIVE_APPS) if profil_gun >= 30 else frozenset()
         s["yeni_uygulama_kisisel"], s["yeni_uygulama_sayisi"] = len(new_p), len(new_both)
         s["yeni_hassas_uygulama"] = len(new_sens)
+        # v2: hassas kategori kullanımında 7 günlük kümülatif artış (USB ile aynı kalıp; sayım aşırı dağınık → negatif binom).
+        # "İlk kez" kategoriyi zaten kullanan kişide sessiz kalır: iş aramayı aylardır yapan biri ayda 7'den 89'a çıktı.
+        k_sens = int(row.get("sensitive_app_count", 0) or 0)
+        sens7 = k_sens + (int(prev6["sensitive_app_count"]) if prev6 is not None and "sensitive_app_count" in prev6 else 0)
+        mu_s = float(ctx.p_sens.loc[sid, "mean"]) if sid in ctx.p_sens.index else 0.0
+        var_s = float(ctx.p_sens.loc[sid, "var"]) if sid in ctx.p_sens.index else 0.0
+        s["hassas_7g_toplam"] = sens7
+        s["hassas_7g_p"] = negbin_sf(sens7, 7 * max(mu_s, 0.1), 7 * var_s) if (sens7 > 0 and profil_gun >= 30) else 1.0
+        if sens7 > 0:
+            ex["hassas_7g"] = f"{sens7} (beklenen ~{7 * max(mu_s, 0.1):.1f})"
         s["jaccard_uygulama"] = jaccard(set(apps_today), set(p_apps))
         if new_both or new_sens:
             ex["yeni_uygulamalar"] = sorted(new_both | new_sens)
