@@ -62,7 +62,7 @@ Değerlendirme günlerinde tetiklenme sayıları. Gölge moddaki kurallar kuyru�
 | HONEY-0018/19/20, PRED-0011/13/14, REL-0015/16, UEBA-0004/0006/0008 | 0 | 0 | |
 
 **r4.2: 8/21 (6 canlı + 2 gölge). r5.2: 9/21 (7 canlı + 2 gölge).** Fark yalnız UEBA-0003. Tetiklenmeyen 12 kuralın
-11'i CERT'te bulunmayan kaynaklara (İK olayları, başarısız giriş, IP/konum, EDR, tuzak) bağlı. REL-0015/16 için kaynak
+10'u CERT'te bulunmayan kaynaklara (İK olayları, başarısız giriş, IP/konum, EDR, tuzak) bağlı. REL-0015/16 için kaynak
 var (paylaşımlı makineler) ama r5.2'de de tetiklenmedi. Daha önce konuşulan "9/21" r4.2 için bu tanımla 8'dir.
 
 ### Lojistik regresyon (7 günlük olasılık)
