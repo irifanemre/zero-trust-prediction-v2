@@ -1,6 +1,6 @@
 """LLM raporlama — 15.2/15.3: yalnızca inceleme kuyruğu için, kanıta bağlı, çıktı doğrulamalı; skorlamada yer almaz (ADR-002).
 
-Injection'a kapalı tasarım (bkz. sanitize.py, rag.py, docs/llm-security.md):
+Injection'a kapalı tasarım (bkz. sanitize.py, rag.py, docs/mimari-dokuman.md Ek D.4):
 - Sistem istemi sabittir ve veri/talimat ayrımını açıkça tanımlar; vaka verisi JSON olarak, rastgele nonce ile
   sınırlanmış blokta gider. Log kaynaklı hiçbir metin istemin talimat kısmına girmez.
 - Vaka verisi modele verilmeden önce temizlenir; talimat benzeri içerik bulunursa varsayılan politika modelin hiç

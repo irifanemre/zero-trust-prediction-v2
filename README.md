@@ -112,7 +112,7 @@ sabit eşik yerine kapasite tabanlı kuyruk tasarımının bilinçli sonucudur v
 
 Prediction katmanı (7 günlük olasılık), aynı veride zamansal holdout ile: sezgisel model AUC 0,61 → öğrenen model
 **AUC 0,86, ECE 0,002** (Brier 0,0081 ≈ taban 0,0084). Ablasyon: akran bağlamı kapatılınca kapsama 16→13/26;
-prediction ve ilişkisel kurallar bu veride fark yaratmadı (İK sinyali yok) — ölçüldü ve belgelendi, saklanmadı. Ayrıntılar ve sınırlar: [docs/cert-validation.md](docs/cert-validation.md). Önemli uyarı: kurallar r4.2 sonuçları
+prediction ve ilişkisel kurallar bu veride fark yaratmadı (İK sinyali yok) — ölçüldü ve belgelendi, saklanmadı. Ayrıntılar ve sınırlar: [docs/bulgular.md](docs/bulgular.md). Önemli uyarı: kurallar r4.2 sonuçları
 görüldükten sonra ayarlanmıştır; yansız rakam için henüz bakılmamış bir sürümde (r5.2/r6.2) tekrar gerekir.
 
 **r5.2 kör koşu** (kurallar dondurulmuş, tek koşu; 1102 kullanıcılık katmanlı örneklem, 56 insider, 360 gün): değerlendirilebilir yakalama **25/30 (0,83)**, ayarda hiç görülmemiş S4 senaryosu 4/4, precision@1 **0,20**, erkenlik medyanı 9 gün. r4.2'de eğitilen öğrenen model r5.2'ye taşınmadı (AUC 0,69). Ayrıntılar ve sapma kaydı: [docs/kor-kosu-r52-sonuc.md](docs/kor-kosu-r52-sonuc.md).
@@ -142,32 +142,32 @@ ağırlık, bastırma, sahip, runbook, kanıt aileleri ve **test senaryoları**.
 - **Sessizce yanlış çalışmaktansa açıkça durmak:** kaynak kalitesi düşerse bağımlı tespitler askıya alınır; uyarı hacmi bir sağlık metriğidir.
 - **LLM/RAG injection'a kapalı:** log kaynaklı her metin veridir — kanonikleştirilir, talimat benzeri içerik redakte edilip
   bayraklanır, nonce'lu yapısal bloklarda modele gider; RAG yalnızca teknik kimliğiyle, SHA-256 doğrulamalı bilgi tabanından
-  getirir; çıktı olay kimliği/takma ad/sayı/aksiyon dili açısından doğrulanmadan analiste ulaşmaz. Ayrıntı: [docs/llm-security.md](docs/llm-security.md).
+  getirir; çıktı olay kimliği/takma ad/sayı/aksiyon dili açısından doğrulanmadan analiste ulaşmaz. Ayrıntı: mimari doküman Ek D.4.
 
 ## Operasyon
 
-Günlük servis modu (`--daily`), SQLite durum deposu, imzalı webhook/JSONL sink'leri ve runbook'lar için
-[docs/operations.md](docs/operations.md). Prediction katmanının kalibrasyon ölçümü, öğrenen model ve ablasyon için
-[docs/prediction.md](docs/prediction.md).
+Günlük servis modu (`--daily`), SQLite durum deposu, imzalı webhook/JSONL sink'leri ve runbook'lar için mimari doküman
+Ek D.2; prediction katmanının kalibrasyon ölçümü, öğrenen model ve ablasyon için Ek D.3.
 
 ## Dokümantasyon
 
+Üç belge var; başka md yok (runbook'lar `src/ztp/detection/runbooks/` altında, kodun parçasıdır).
+
 - [docs/mimari-dokuman.md](docs/mimari-dokuman.md) — mimari dokümanın md sürümü (**1.2**): Final 1.0 metni + uygulama ve CERT
   doğrulamasıyla düzeltilen bölümler (`1.1 düzeltmesi` blokları), mimari ↔ uygulama denetiminden çıkan düzeltmeler
-  (`1.2 düzeltmesi` blokları), 1.0→1.1 ve 1.1→1.2 değişiklik günlükleri, ADR-011…015.
-  PDF: [docs/Zero_Trust_Prediction_Mimari_v1.1.pdf](docs/Zero_Trust_Prediction_Mimari_v1.1.pdf) — **1.1 baskısıdır, md 1.2'dir**;
-  yeniden üretmek için (`pip install -e ".[docs]"`, pango gerekir):
+  (`1.2 düzeltmesi` blokları), 1.0→1.1 ve 1.1→1.2 değişiklik günlükleri, ADR-011…015. Ek D: uygulama ayrıntıları
+  (modüller ve bilinen sınırlar, operasyon, prediction ölçümü, LLM güvenliği). PDF üretmek için
+  (`pip install -e ".[docs]"`, pango gerekir):
   `python scripts/build_pdf.py docs/mimari-dokuman.md docs/Zero_Trust_Prediction_Mimari_v1.2.pdf`.
-- [docs/bulgular.md](docs/bulgular.md) — mimari ↔ uygulama denetiminin bulguları: ne beklendiği, ne bulunduğu, yapılan
-  değişiklik ve önce/sonra ölçümü.
-- [docs/architecture.md](docs/architecture.md) doküman→kod eşlemesi · [docs/cert-validation.md](docs/cert-validation.md) ·
-  [docs/prediction.md](docs/prediction.md) · [docs/operations.md](docs/operations.md) · [docs/llm-security.md](docs/llm-security.md)
+- [docs/bulgular.md](docs/bulgular.md) — mimari ↔ uygulama denetiminin bulguları (ne beklendi, ne bulundu, yapılan
+  değişiklik, önce/sonra ölçümü) ve CERT r4.2 doğrulaması (veri eşlemesi, sonuçlar, sınırlar).
+- [docs/kor-kosu-r52-sonuc.md](docs/kor-kosu-r52-sonuc.md) — CERT r5.2 kör koşu sonucu, r4.2 ile karşılaştırma, sapma kaydı.
 
 ## Bilinen sınırlar
 
 ATT&CK bilgi grafı örnek alt kümedir; saklama süresi / silme hakkı uygulanmadı; öğrenen model yalnızca cevap anahtarı
 (test) veya analist etiketiyle eğitilir ve varsayılan olarak skora eklenmez (`prediction_weight: 0`); CERT'te İK sinyalleri
-olmadığından PRED-0011/13/14 gerçek veride sınanamadı. Yol haritası için [docs/architecture.md](docs/architecture.md).
+olmadığından PRED-0011/13/14 gerçek veride sınanamadı. Yol haritası için mimari doküman §23 ve Ek D.1.
 
 ## Lisans
 

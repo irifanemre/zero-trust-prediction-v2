@@ -1,6 +1,7 @@
 # CERT r5.2 kör koşu — sonuç raporu
 
-Plan: [kor-kosu-plani.md](kor-kosu-plani.md) (ön kayıt; §10 koşu öncesi ekler). Koşu 27 Ekim 2026'da bir kez yapıldı.
+Plan: ön kayıt belgesi `docs/kor-kosu-plani.md` (§10 koşu öncesi ekler); dosya Ekim 2026'da doküman sadeleştirmesinde repodan
+kaldırıldı, git geçmişinde duruyor: `git show kor-kosu-r5.2-hazir:docs/kor-kosu-plani.md`. Koşu 27 Ekim 2026'da bir kez yapıldı.
 Kurallar, eşikler, ağırlıklar ve metrik tanımları koşudan sonra değiştirilmedi.
 
 ## Kayıt

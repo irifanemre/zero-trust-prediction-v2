@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CERT r5.2 kör koşusu — koşu ÖNCESİ hazırlık (docs/kor-kosu-plani.md §3, §6). r5.2'de tespit/skor/kuyruk üretmez.
+"""CERT r5.2 kör koşusu — koşu ÖNCESİ hazırlık (ön kayıt planı §3, §6: `git show kor-kosu-r5.2-hazir:docs/kor-kosu-plani.md`). r5.2'de tespit/skor/kuyruk üretmez.
 
 Alt komutlar:
     r42-model   r4.2 temel koşusu (cert_eval.py ile aynı ayarlar) → birincil LR modeli (C = 0,001, tamamlayıcı protokolün
