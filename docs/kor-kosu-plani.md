@@ -147,19 +147,19 @@ pencereler: 2010-06-08 – 2010-09-05, 2010-09-06 – 2010-12-04, 2010-12-05 –
 803,1 bayt. r5.2 pencere başına olay (111 günlük tarihçe dahil): 27.153.265 / 26.390.067 / 25.696.323 / 24.512.873 →
 en büyük pencerenin tahmini tepesi 21,81 GB > 12 GB. Parça parça işleme yetmiyor; **f = 0,55** (12 / 21,81 = 0,550,
 0,05'lik adımla aşağı). Örneklem `configs/splits/cert-r5.2-orneklem.json`
-(sha256 `607770ff795f941c0535c60c3a7f71111f68ed9758d06c00183f913753bd9d7b`): her katmandan floor(f·n + 0,5), tohum 42 —
+(sha256 `bbef9d4266e6cf7533a73b6eea884362ed94114b10f35d20f3e02e1b081b922d`): her katmandan floor(f·n + 0,5), tohum 42 —
 S1 16/29, S2 17/30, S3 6/10, S4 17/30, benign 1046/1901; toplam 1102 kullanıcı, 56 insider, insider oranı %5,08
 (nüfusta %4,95). Yükleyiciye örneklem için `only_users` parametresi eklendi; varsayılanı davranışı değiştirmez,
 `max_users` kullanılmaz.
 
 **Birincil LR modeli (§4.6):** `configs/models/kor-r52-birincil-lr.json`
-(sha256 `9dca8b3766a2bfcb024669e5214ec325624195c2aaab86b7a102d945b1345bb2`). C = 0,001; r4.2 tamamlayıcı protokolünün
+(sha256 `433ffbf963d897803d2a7137a53dbb849b7cdf32b97dc13e66a21efb8cf6d8ee`). C = 0,001; r4.2 tamamlayıcı protokolünün
 eğitim parçası (669 kullanıcı, tüm günler, 50.718 satır, 525 pozitif); eşik 0,1173 (doğrulama parçasında en iyi F1).
 Yeniden üretim kontrolü: r4.2 test parçasında AUC 0,84, ECE 0,0014, F1 0,076 — eski koşuyla birebir aynı. Aynı r4.2
 koşusunda kapsama 26 GEÇTİ (kabul ölçütü §2 yeniden doğrulandı).
 
 **İkincil bölme (§4.6):** `configs/splits/cert-r5.2-kullanici-bolmesi.json`
-(sha256 `3e5ea3264b00a92de39fd3e5b62e0cc6efc278da3a9ce454ebdc201cb5108f56`), 2000 kullanıcı üzerinden 1400/300/300,
+(sha256 `bdac0212201f9459cd7c10884f97158c84711d6f50c56f832955c9590e822aff`), 2000 kullanıcı üzerinden 1400/300/300,
 insider 69/15/15. Örneklem dışındaki kullanıcılar ikincil protokolde de yer almaz.
 
 **Sürücü ve pencereler arası birleştirme** (`scripts/kor_kosu_r52.py`; plan bu ayrıntıları açık bırakmıştı, koşudan önce
@@ -173,3 +173,6 @@ r5.2'den önce yalnız r4.2'nin son penceresinde sınandı.
 **Kural sağlığı tanımı (r4.2 karşılaştırması için):** r4.2 değerlendirme döneminde canlı tetiklenen 6 kural
 (UEBA-0001/0002/0005/0007/0017, PRED-0012) ve gölge modda tetiklenen 2 kural (UEBA-0009, UEBA-IF01); UEBA-0003 bu
 dönemde tetiklenmedi, DQ-0010 kaynak (EDR) olmadığı için devre dışı.
+
+sha256 değerleri depodaki LF içeriğinin karmasıdır (`.gitattributes`: `configs/**/*.json eol=lf`); ilk ek commit'inde
+yanlışlıkla Windows CRLF çalışma kopyasının karmaları yazılmıştı, koşudan önce düzeltildi.

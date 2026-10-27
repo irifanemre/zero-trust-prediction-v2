@@ -119,7 +119,8 @@ def cmd_r42_model(args: argparse.Namespace) -> int:
         ),
         r42_test_kontrol=test,
     )
-    MODEL_PATH.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # depodaki LF ile aynı bayt → plana yazılan sha256 her platformda tutar
+    MODEL_PATH.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     cov = scenario_table(pipe.metrics)
     res = dict(
         olay=n_events,
@@ -280,7 +281,7 @@ def cmd_r52_orneklem(args: argparse.Namespace) -> int:
         ),
         kullanicilar=sorted(chosen),
     )
-    R52_SAMPLE.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    R52_SAMPLE.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     LOG.info("Örneklem: %s — %s", R52_SAMPLE, json.dumps(doc["meta"], ensure_ascii=False))
     return 0
 
