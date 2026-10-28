@@ -140,7 +140,7 @@ def main() -> int:
     ap.add_argument("--end", default="2010-11-30")
     ap.add_argument("--days", type=int, default=90)
     ap.add_argument("--warmup", type=int, default=21)
-    ap.add_argument("--budget", type=int, default=10)
+    ap.add_argument("--budget", type=int, default=30)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--tenant", default="cert-r42")
     ap.add_argument("--split", default=str(DEFAULT_SPLIT))

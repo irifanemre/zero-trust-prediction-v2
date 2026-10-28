@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import math
 from collections import defaultdict
 from dataclasses import dataclass
@@ -159,6 +160,14 @@ class ProfileEngine:
             ["sensitive_app_count"] if "sensitive_app_count" in hist else []
         )
         w6_sum = hist[hist["day"] >= day - 6 * DAY].groupby("sid")[w6_cols].sum()
+        # #1 çok ufuklu kanıt biriktirici (v3): aynı sayım ailelerinin 1/3/7/14/30 günlük toplamları. Tek olay yerine
+        # davranış dizisini görmek için; 7g zaten vardı, diğer ufuklar onun yanına eklenir (eski sinyaller değişmez).
+        acc_cols = [c for c in ("usb_count", "files_accessed", "bytes_out", "offhours_logon_count") if c in hist]
+        if "sensitive_app_count" in hist:
+            acc_cols.append("sensitive_app_count")
+        acc_sums = {
+            w: hist[hist["day"] >= day - (w - 1) * DAY].groupby("sid")[acc_cols].sum() for w in cfg.accumulator_windows if w > 1
+        }
         # v2: hassas kategori kullanımının kişisel ortalama/varyansı (sayım aşırı dağınık → negatif binom)
         p_sens = (
             gp["sensitive_app_count"].agg(["mean", "var"]).fillna(0)
@@ -217,6 +226,7 @@ class ProfileEngine:
         )
         ctx.p_sum = p_sum
         ctx.w6_sum = w6_sum
+        ctx.acc_sums = acc_sums
         ctx.p_sens = p_sens
         ctx.peer_foreign_rate = peer_foreign_rate
         return ctx
@@ -413,6 +423,39 @@ class ProfileEngine:
         s["veri_hacmi_anomali_z"] = max(_zc) if _zc else float("nan")
         # 12.4 mutlak taban: kritik varlığa erişim varsa şiddette akran indirimi uygulanmaz
         s["kritik_varlik_erisim_sayisi"] = int(row.get("sensitive_access_count", 0) or 0)
+        # ---- #1 çok ufuklu kanıt biriktirici (v3): aynı sayım ailesinin 1/3/7/14/30 günlük toplamı.
+        # Tek bir günün sıçraması yerine davranış dizisi görünür; eşik altında kalan ama süreklilik gösteren
+        # davranış (2.3 "eşik altı kalma") uzun ufukta belirginleşir. Var olan 7g adları korunur, üzerine yazılmaz.
+        acc_families = {
+            "usb": "usb_count",
+            "dosya": "files_accessed",
+            "veri_hacmi": "bytes_out",
+            "mesai_disi_giris": "offhours_logon_count",
+            "hassas": "sensitive_app_count",
+        }
+        acc_sums = getattr(ctx, "acc_sums", {})
+        for ad, col in acc_families.items():
+            bugun = float(row.get(col, 0) or 0)
+            for w in cfg.accumulator_windows:
+                key = f"{ad}_{w}g_toplam"
+                if key in s:  # 7g gibi önceden tanımlı sinyaller (donmuş kurallar bunlara bakıyor) ezilmez
+                    continue
+                gecmis = 0.0
+                frame = acc_sums.get(w)
+                if frame is not None and sid in frame.index and col in frame.columns:
+                    gecmis = float(frame.loc[sid, col])
+                s[key] = bugun + gecmis
+        # ---- #4 varlık katmanlandırma (v3): dokunulan en yüksek varlık katmanı (tier0 > tier1 > yok).
+        # Davranış anomalisi tek başına değil, eriştiği varlığın önemiyle birlikte değerlendirilir.
+        tiers = cfg.asset_tiers or {}
+        res_today = [str(x).lower() for x in (row.get("resources") or frozenset())]
+        for tier_name, level in (("tier0", 2), ("tier1", 1)):
+            pats = [p.lower() for p in (tiers.get(tier_name) or [])]
+            hit = sum(1 for r_ in res_today if any(fnmatch.fnmatch(r_, p) for p in pats)) if pats else 0
+            s[f"{tier_name}_erisim_sayisi"] = hit
+            if hit and s.get("varlik_katmani", 0) < level:
+                s["varlik_katmani"] = level
+        s.setdefault("varlik_katmani", 0)
         if not math.isnan(exp_b):
             ex["veri_hacmi_7g_mb"] = f"{bytes7 / 1e6:,.0f} MB (7g beklenen ~{7 * exp_b / 1e6:,.0f} MB)"
         ex["usb_7g"] = f"{usb7} (beklenen ~{7 * (exp_usb if not math.isnan(exp_usb) else 0.1):.1f})"

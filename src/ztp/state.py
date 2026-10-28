@@ -144,6 +144,7 @@ def hits_to_records(hit_log: Dict[str, list]) -> List[dict]:
                     aciklama=h.aciklama,
                     runbook=getattr(h, "runbook", ""),
                     kritik=bool(getattr(h, "kritik", False)),
+                    kaynaklar=list(getattr(h, "kaynaklar", []) or []),
                 )
             )
     return out
@@ -166,6 +167,7 @@ def hits_from_records(records: List[dict], hit_cls) -> Dict[str, list]:
             r.get("aciklama", ""),
             r.get("runbook", ""),
             bool(r.get("kritik", False)),
+            list(r.get("kaynaklar") or []),
         )
         out.setdefault(r["sid"], []).append(h)
     return out

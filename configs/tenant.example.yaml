@@ -3,7 +3,7 @@
 tenant_id: musteri-A
 
 # Alarm bütçesi: günlük inceleme kuyruğu = analist kapasitesi (sabit eşik yok)
-alarm_budget_per_day: 8
+alarm_budget_per_day: 30
 critical_percentile: 0.999
 
 # Baseline pencereleri ve zehirleme şüphesi eşiği (7g vs 90g medyan farkı, robust-z)

@@ -15,7 +15,7 @@ from ztp.deception import HoneytokenRegistry
 class TenantConfig:
     tenant_id: str = "musteri-A"
     # 13.5 Alarm bütçesi: N = analist kapasitesi (sabit eşik YOK — ADR-005)
-    alarm_budget_per_day: int = 8
+    alarm_budget_per_day: int = 30
     critical_percentile: float = 0.999  # 13.5 kritik eşik istisnası (bütçeden bağımsız)
     # v2 doğrulama kapısı: bütçe hedef değil üst sınır — tek kuralın tek seferlik sinyali analiste değil izleme listesine
     # gider. Kuyruk için: 2+ farklı kural, aynı sinyalin kuyruk_tekrar_gun farklı günde tekrarı, güçlendirici çarpan ya da
@@ -83,6 +83,22 @@ class TenantConfig:
     # aldatma katmanı: tuzak varlıklar {hesaplar: [...], kaynaklar: [fnmatch kalıpları], cihazlar: [...]} — meşru kullanımı yok,
     # her etkileşim deterministik kritik tespit (13.5 tek-sinyal istisnası); boş → katman kapalı
     honeytokens: Dict[str, List[str]] = field(default_factory=dict)
+    # ---- v3 revizyonları (r5.2 derslerinden). Hepsi ayarlanabilir ve VARSAYILAN KAPALI: 14.5 gereği bir bileşen
+    # ablasyonla değer ürettiği gösterilmeden açılmaz. Açık hâlleri `ablation.VARIANTS` ile ölçülür.
+    # #1 çok ufuklu kanıt biriktirici: sayım sinyalleri bu pencerelerde de toplanır (7g zaten vardı)
+    accumulator_windows: Tuple[int, ...] = (1, 3, 7, 14, 30)
+    # #3 kanıt çeşitliliği: aynı gün N+ FARKLI veri kaynağından tespit varsa çarpan (0 = kapalı)
+    source_diversity_min: int = 3
+    source_diversity_multiplier: float = 0.0
+    # #4 varlık katmanlandırma: {tier0: [fnmatch kalıpları], tier1: [...]}; erişim varsa çarpan (0 = kapalı)
+    asset_tiers: Dict[str, List[str]] = field(default_factory=dict)
+    tier0_multiplier: float = 0.0
+    tier1_multiplier: float = 0.0
+    # #2 öncelik sıralayıcı: kuyruk sırası ham skordan AYRILIR. Ağırlıklar 0 iken sıra bugünküyle birebir aynıdır.
+    priority_momentum_weight: float = 0.0  # risk yörüngesi eğimi (PRED sinyali)
+    priority_diversity_weight: float = 0.0  # farklı veri kaynağı sayısı
+    priority_asset_weight: float = 0.0  # dokunulan en yüksek varlık katmanı
+    priority_peer_weight: float = 0.0  # akran grubundan yapısal sapma
 
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
@@ -99,6 +115,14 @@ class TenantConfig:
             raise ValueError("peer_neutral_ratio > 1 olmalı (log ölçeğinde nötr nokta)")
         if self.llm_on_injection not in ("template", "sanitized"):
             raise ValueError("llm_on_injection: template | sanitized")
+        if not self.accumulator_windows or any(int(w) < 1 for w in self.accumulator_windows):
+            raise ValueError("accumulator_windows: pozitif gün listesi olmalı")
+        if any(int(w) > self.long_window_days for w in self.accumulator_windows):
+            raise ValueError("accumulator_windows uzun pencereyi aşamaz (9.2)")
+        unknown_tiers = set(self.asset_tiers) - {"tier0", "tier1"}
+        if unknown_tiers:
+            raise ValueError(f"asset_tiers: yalnız tier0/tier1 (bilinmeyen: {sorted(unknown_tiers)})")
+        self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)
         HoneytokenRegistry.from_config(self.honeytokens)  # şema hatası açık hata verir; sessiz düşüş yok

@@ -386,7 +386,7 @@ class ZeroTrustPredictionPipeline:
         # 5) kalibrasyon + alarm bütçesi
         t0 = time.perf_counter()
         self.scorer.calibrate(day, results)
-        queue = self.scorer.select_queue(day, results)
+        queue = self.scorer.select_queue(day, results, signals)
         self.health.time("skorlama", t0)
         self.health.rule_errors = self.engine.errors
         self.health.profile_fresh[str(day.date())] = f"baseline {len(ctx.p_med)} kullanıcı, pencere {cfg.long_window_days}g"

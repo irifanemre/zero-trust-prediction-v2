@@ -77,7 +77,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--users", type=int, default=150)
     ap.add_argument("--days", type=int, default=30, help="değerlendirme penceresi (gün)")
     ap.add_argument("--warmup", type=int, default=21, help="risk serisi ısınma günü (vaka üretilmez)")
-    ap.add_argument("--budget", type=int, default=8, help="alarm bütçesi N = analist kapasitesi (13.5)")
+    ap.add_argument("--budget", type=int, default=30, help="alarm bütçesi N = analist kapasitesi (13.5)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument(
         "--honeytokens",

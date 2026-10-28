@@ -39,7 +39,37 @@ VARIANTS: Dict[str, dict] = {
     "iliskisel_yok": dict(aciklama="REL-* (derin graf) kuralları gölgede", catalog=_shadow(("REL-",))),
     "carpan_yok": dict(aciklama="13.3 korelasyon çarpanları kapalı", cfg=dict(correlation_multipliers=False)),
     "akran_yok": dict(aciklama="9.2 akran ağırlığı kapalı (yalnızca kişisel baseline)", cfg=dict(peer_context=False)),
+    # ---- v3 revizyonları: varsayılanda KAPALI olan bileşenler burada AÇILARAK ölçülür (14.5 giriş şartı).
+    "kaynak_cesitliligi": dict(
+        aciklama="#3 üç+ farklı veri kaynağından tespit varsa ×1,5",
+        cfg=dict(source_diversity_multiplier=1.5),
+    ),
+    "oncelik_momentum": dict(
+        aciklama="#2 kuyruk sırası ham skordan ayrı: risk yörüngesi momentumu",
+        cfg=dict(priority_momentum_weight=0.5),
+    ),
+    "oncelik_cesitlilik": dict(
+        aciklama="#2 kuyruk sırası: veri kaynağı çeşitliliği",
+        cfg=dict(priority_diversity_weight=0.5),
+    ),
+    "oncelik_akran": dict(
+        aciklama="#2 kuyruk sırası: akran grubundan yapısal sapma",
+        cfg=dict(priority_peer_weight=0.5),
+    ),
 }
+# Varlık katmanlandırma (#4) ablasyona ayrı eklenir: kalıplar müşteriye özgüdür, CERT'te varlık envanteri yoktur.
+# Kullanımı: run_ablation(..., variants={**VARIANTS, "varlik_katmani": varlik_varyanti(tier0=[...], tier1=[...])}).
+
+
+def varlik_varyanti(tier0: Optional[List[str]] = None, tier1: Optional[List[str]] = None) -> dict:
+    return dict(
+        aciklama="#4 Tier-0/Tier-1 varlığa erişimde çarpan",
+        cfg=dict(
+            asset_tiers={"tier0": tier0 or [], "tier1": tier1 or []},
+            tier0_multiplier=2.0,
+            tier1_multiplier=1.5,
+        ),
+    )
 
 
 def run_ablation(
