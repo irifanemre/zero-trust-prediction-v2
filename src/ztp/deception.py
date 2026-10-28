@@ -22,14 +22,24 @@ import pandas as pd
 TOKEN_COLUMN = "honeytoken"
 KIND_ACCOUNT, KIND_RESOURCE, KIND_DEVICE = "hesap", "kaynak", "cihaz"
 UNATTRIBUTED_COLUMNS = ["event_id", "time", "source", "actor_raw", "device", "src_ip", "token", "neden"]
-_CONFIG_KEYS = {"hesaplar": KIND_ACCOUNT, "kaynaklar": KIND_RESOURCE, "cihazlar": KIND_DEVICE}
+# Yapılandırma alanı → tespit kategorisi. "gizli_dizgiler" (sahte API anahtarı, SSH key, cloud secret, DB parolası)
+# AYRI bir kategori değildir: KIND_RESOURCE'a eşlenir, böylece aşağı akıştaki sinyal adları (tuzak_kaynak_sayisi) ve
+# donmuş profil/özellik kodu değişmez — yalnız nerede arandığı değişir (komut satırı ve kaynak yolu metni).
+_CONFIG_KEYS = {
+    "hesaplar": KIND_ACCOUNT,
+    "kaynaklar": KIND_RESOURCE,
+    "cihazlar": KIND_DEVICE,
+    "gizli_dizgiler": KIND_RESOURCE,
+}
+SECRET_FIELDS = ("cmdline", "resource", "process", "app")  # OCSF-lite'ta gizli dizginin görünebileceği metin alanları
 
 
 @dataclass(frozen=True)
 class HoneytokenRegistry:
-    accounts: FrozenSet[str]  # aktör adı (küçük harf): tuzak AD hesabı, servis hesabı, API anahtarı kimliği
+    accounts: FrozenSet[str]  # aktör adı (küçük harf): tuzak AD hesabı, servis hesabı, ayrıcalıklı tuzak hesap
     resources: Tuple[str, ...]  # dosya/paylaşım yolu kalıpları (fnmatch, küçük harf)
     devices: FrozenSet[str]  # tuzak sunucu / host adları (küçük harf)
+    secrets: FrozenSet[str] = frozenset()  # sahte API anahtarı / SSH key / cloud secret / DB parolası (tam dizgi)
 
     @classmethod
     def from_config(cls, spec: Optional[Mapping]) -> "HoneytokenRegistry":
@@ -43,17 +53,22 @@ class HoneytokenRegistry:
             if not isinstance(items, (list, tuple)) or not all(isinstance(x, str) and x.strip() for x in items):
                 raise ValueError(f"honeytokens.{key}: boş olmayan metin listesi olmalı")
             vals[key] = tuple(x.strip().lower() for x in items)
-        return cls(frozenset(vals["hesaplar"]), vals["kaynaklar"], frozenset(vals["cihazlar"]))
+        return cls(
+            frozenset(vals["hesaplar"]),
+            vals["kaynaklar"],
+            frozenset(vals["cihazlar"]),
+            frozenset(vals["gizli_dizgiler"]),
+        )
 
     @classmethod
     def empty(cls) -> "HoneytokenRegistry":
         return cls(frozenset(), (), frozenset())
 
     def __bool__(self) -> bool:
-        return bool(self.accounts or self.resources or self.devices)
+        return bool(self.accounts or self.resources or self.devices or self.secrets)
 
     def __len__(self) -> int:
-        return len(self.accounts) + len(self.resources) + len(self.devices)
+        return len(self.accounts) + len(self.resources) + len(self.devices) + len(self.secrets)
 
     # ---- eşleştirme ----------------------------------------------------------
     def tag(self, ev: pd.DataFrame) -> pd.Series:
@@ -66,6 +81,17 @@ class HoneytokenRegistry:
             res = ev["resource"].astype("string").str.lower()
             m = res.str.fullmatch(regex).fillna(False).astype(bool)
             out[m] = KIND_RESOURCE + ":" + ev.loc[m, "resource"].astype(str)
+        if self.secrets:
+            # Gizli dizgi, kendisini taşıyan metnin İÇİNDE geçer (komut satırı, dosya yolu, süreç adı, uygulama).
+            # Tam eşleşme değil, içerme araması: `curl -H "Authorization: Bearer <sahte>"` gibi kullanımlar yakalanır.
+            for field in SECRET_FIELDS:
+                if field not in ev.columns:
+                    continue
+                txt = ev[field].astype("string").str.lower()
+                for secret in self.secrets:
+                    m = txt.str.contains(secret, regex=False, na=False).to_numpy(dtype=bool)
+                    if m.any():
+                        out[m] = KIND_RESOURCE + ":gizli:" + secret
         if self.devices:
             dev = ev["device"].astype("string").str.lower()
             m = dev.isin(self.devices).fillna(False).astype(bool)

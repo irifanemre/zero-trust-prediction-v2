@@ -5,7 +5,7 @@ import pytest
 
 from ztp.config import TenantConfig
 from ztp.data.synthetic import HONEYTOKENS_DEFAULT, SyntheticOrg
-from ztp.deception import KIND_ACCOUNT, TOKEN_COLUMN, HoneytokenRegistry
+from ztp.deception import KIND_ACCOUNT, KIND_RESOURCE, TOKEN_COLUMN, HoneytokenRegistry
 from ztp.detection.catalog import load_catalog, validate_rule
 from ztp.detection.engine import Hit
 from ztp.features import extract_features
@@ -188,3 +188,26 @@ def test_pipeline_end_to_end_honeytoken_case(tmp_path):
     honey_hits = [h for h in first["tespitler"] if h["kural"].startswith("HONEY")]
     assert all(h["kanit"] and h["runbook"].startswith("RB-HONEY") for h in honey_hits)
     assert (tmp_path / "honey" / "honeytoken_unattributed.csv").exists() and pipe.honeytoken_unattributed.empty
+
+
+def test_secret_strings_match_in_cmdline_and_paths():
+    """#8 aldatma genişlemesi: sahte API anahtarı / SSH key / cloud secret, kendisini taşıyan metnin İÇİNDE aranır.
+    Yeni sinyal adı üretmez — mevcut 'kaynak' kategorisine eşlenir, böylece donmuş profil/özellik kodu değişmez."""
+    reg = HoneytokenRegistry.from_config(dict(gizli_dizgiler=["AKIA-FAKE-9Z1Q", "ssh-rsa-TUZAK"]))
+    ev = pd.DataFrame(
+        [
+            _ev(1, "edr", "ali", device="HOST-1"),
+            _ev(2, "edr", "veli", device="HOST-2"),
+            _ev(3, "file_server", "ayse", cls=OCSF_FILE, resource=r"\\FS\keys\ssh-rsa-TUZAK.pem"),
+        ]
+    )
+    ev.loc[0, "cmdline"] = 'curl -H "Authorization: Bearer AKIA-FAKE-9Z1Q" https://api.example'
+    ev.loc[1, "cmdline"] = "ls -la /home"
+    tags = _vals(reg.tag(ev))
+    assert tags == ["kaynak:gizli:akia-fake-9z1q", None, "kaynak:gizli:ssh-rsa-tuzak"]
+    # kaynak kategorisine eşlendiği için tuzak_kaynak_sayisi sinyalini besler (HONEY-0019 tetikler)
+    ev[TOKEN_COLUMN] = tags
+    ev["canonical"], ev["is_service"] = ["U-1", "U-2", "U-3"], False
+    f = extract_features(ev, []).set_index("sid")
+    assert f.loc["U-1", "honeytoken_count"] == 1 and f.loc["U-2", "honeytoken_count"] == 0
+    assert all(t.startswith(KIND_RESOURCE + ":") for t in f.loc["U-3", "honeytokens"])

@@ -47,9 +47,12 @@ critical_assets:
 
 # Aldatma katmanı: tuzak varlıklar (meşru kullanımı yok → her etkileşim deterministik KRİTİK tespit, bütçeden bağımsız)
 honeytokens:
-  hesaplar: [svc-backup-legacy]                  # tuzak AD/servis hesabı; kullanım kaynağına (cihaz sahibi → IP) atfedilir
+  hesaplar: [svc-backup-legacy, adm-eski]        # tuzak AD/servis/ayrıcalıklı hesap; kullanım kaynağına (cihaz sahibi → IP) atfedilir
   kaynaklar: ['\\FIN-SRV-01\bonus_2026*']        # tuzak dosya/paylaşım (fnmatch kalıbı)
   cihazlar: [HONEY-SRV-01]                       # tuzak sunucu
+  gizli_dizgiler:                                # sahte API anahtarı / SSH key / cloud secret / DB parolası
+    - AKIA-FAKE-9Z1QWERTYUIOP                    # komut satırı, dosya yolu, süreç adı ve uygulama alanında aranır
+    - ssh-rsa-TUZAK-KEY-2026                     # içerme araması: "Bearer <anahtar>" gibi kullanımlar da yakalanır
 
 # Bastırma kuralları: en dar kapsam, son kullanma tarihi, yazılı gerekçe ve sahip zorunlu
 suppressions:
