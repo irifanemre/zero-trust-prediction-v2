@@ -1,13 +1,17 @@
 """docs/mimari-dokuman.md → PDF (WeasyPrint, CSS paged media). Kullanım: python scripts/build_pdf.py <md> <pdf>
 
 Kapak, belge bilgileri, sayfa numaralı içindekiler, bölüm başına yeni sayfa, tekrar eden tablo başlıkları,
-koşan başlık/altbilgi, PDF yer imleri, 1.1 düzeltme bloklarının vurgusu.
+koşan başlık/altbilgi, PDF yer imleri, 1.1/1.2 düzeltme bloklarının vurgusu.
+
+Kapaktaki sürüm, tarih ve referans commit belgenin ön bölümünden ve git'ten okunur; betikte elle
+güncellenen sürüm sabiti yoktur.
 """
 
 from __future__ import annotations
 
 import html
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,7 +19,6 @@ import markdown
 
 SRC = Path(sys.argv[1])
 OUT = Path(sys.argv[2])
-VERSION, DATE, COMMIT = "1.2", "Eylül 2026", "0a013cc"
 
 md_text = SRC.read_text(encoding="utf-8")
 
@@ -24,6 +27,30 @@ head, body = md_text.split("\n---\n", 1)
 title_line = head.splitlines()[0].lstrip("# ").strip()
 meta = dict(re.findall(r"^\*\*(.+?):\*\*\s*(.+)$", head, flags=re.M))
 intro_paras = [p.strip() for p in re.split(r"\n\s*\n", head) if p.strip() and not p.startswith("#") and not p.startswith("**")]
+
+# Sürüm/tarih belgenin ön bölümünden, referans commit git'ten okunur: betikte elle güncellenen sabit kalmaz
+# (sabitler bir kez bayatladı — kapakta belgeyi değiştirmemiş bir commit yazıyordu).
+VERSION_FULL = meta.get("Sürüm", "").strip()
+VERSION = (re.match(r"[\d.]+", VERSION_FULL) or re.match(r".*", "?")).group(0)
+DATE = meta.get("Tarih", "").strip() or "—"
+
+
+def _doc_commit(path: Path) -> str:
+    """Belgeyi en son değiştiren commit (git yoksa/kopya dışındaysa '—')."""
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%h", "--", str(path.resolve())],  # mutlak yol: pathspec cwd'ye bağlı kalmasın
+            cwd=path.resolve().parent,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return out.stdout.strip() or "—"
+    except (OSError, subprocess.SubprocessError):
+        return "—"
+
+
+COMMIT = _doc_commit(SRC)
 
 EXT = ["tables", "fenced_code", "sane_lists", "pymdownx.tilde", "attr_list"]
 
@@ -155,13 +182,13 @@ page = f"""<!doctype html><html lang="tr"><head><meta charset="utf-8">
   <p class="sub">Nihai Birleşik Mimari ve Uygulama Dokümanı</p>
   <div class="rule"></div>
   <table class="meta">
-    <tr><th>Sürüm</th><td><strong>{VERSION}</strong> — Final 1.0 üzerine uygulama ve doğrulama düzeltmeleri</td></tr>
+    <tr><th>Sürüm</th><td>{html.escape(VERSION_FULL)}</td></tr>
     <tr><th>Tarih</th><td>{DATE}</td></tr>
     <tr><th>Kapsam</th><td>{html.escape(meta.get("Kapsam", ""))}</td></tr>
-    <tr><th>Referans uygulama</th><td><code>zero-trust-prediction</code> · <code>docs/mimari-dokuman.md</code> ({COMMIT})</td></tr>
-    <tr><th>Doğrulama</th><td>CERT Insider Threat Test Dataset r4.2 · sentetik regresyon · 82 otomatik test</td></tr>
+    <tr><th>Referans uygulama</th><td><code>zero-trust-prediction</code> · <code>{html.escape(SRC.name)}</code> ({COMMIT})</td></tr>
+    <tr><th>Doğrulama</th><td>CERT Insider Threat Test Dataset r4.2 · sentetik regresyon · otomatik test paketi</td></tr>
   </table>
-  <div class="foot">Bu belge Final 1.0 metnini korur; uygulama ve CERT doğrulamasıyla değişen noktalar bölüm içinde “1.1 düzeltmesi” bloklarıyla işaretlenmiştir. Sayısal eşikler kalibrasyon başlangıç değerleridir.</div>
+  <div class="foot">Bu belge Final 1.0 metnini korur; uygulama ve CERT doğrulamasıyla değişen noktalar bölüm içinde “1.1/1.2 düzeltmesi” bloklarıyla işaretlenmiştir. Sayısal eşikler kalibrasyon başlangıç değerleridir.</div>
 </section>
 <section class="front">
   <h2>Belge bilgileri</h2>
