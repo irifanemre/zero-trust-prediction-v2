@@ -146,6 +146,42 @@ def _url_category(url: str) -> Optional[str]:
     return None
 
 
+# Olay tablosunda tekrar eden metinler satır başına ~50 bayt tutar; 50 milyon satırda bu tek başına 25 GB demektir.
+# Az sayıda farklı değer taşıyan (ve CERT'te tamamen boş olan) kolonlar kategorik tipe çevrilir: değer bir kez
+# saklanır, satırda yalnız küçük bir kod durur. Veri ve sonuç değişmez; yalnız bellek düşer (ölçüm: 651 → ~200 bayt).
+#
+# BİLEREK DIŞARIDA BIRAKILANLAR:
+#   device, canonical → features.py'da groupby ANAHTARI; kategorik anahtar pandas'ta boş kombinasyonları da üretir
+#                       (observed=False) ve belleği patlatır. features.py donmuş olduğu için orada observed=True denemez.
+#   cmdline           → features.py `.fillna("")` çağırıyor; kategorik kolonda kategori listesinde olmayan değerle
+#                       fillna ValueError verir.
+#   event_id          → her satırda benzersiz, kategorik kazanç yok.
+COMPACT_CATEGORICAL = (
+    "source",
+    "action",
+    "outcome",
+    "app",
+    "category",
+    "country",
+    "process",
+    "parent_process",
+    "src_ip",
+    "resource",
+    "actor_raw",  # ~4 bin farklı değer, 50M satır: groupby anahtarı değil (yükleyicinin kendi groupby'ı observed=True)
+)
+
+
+def _compact(events: pd.DataFrame) -> pd.DataFrame:
+    for col in COMPACT_CATEGORICAL:
+        if col in events.columns and not isinstance(events[col].dtype, pd.CategoricalDtype):
+            events[col] = events[col].astype("category")
+    if "class_uid" in events.columns:
+        events["class_uid"] = pd.to_numeric(events["class_uid"], errors="coerce").fillna(0).astype(np.int32)
+    if "bytes_out" in events.columns and events["bytes_out"].max() < np.iinfo(np.int32).max:
+        events["bytes_out"] = events["bytes_out"].astype(np.int32)
+    return events
+
+
 def load_cert_dataset(
     cert_dir: str,
     start: pd.Timestamp,
@@ -393,7 +429,12 @@ def load_cert_dataset(
     events["received_time"] = pd.to_datetime(events["received_time"])
     events["bytes_out"] = pd.to_numeric(events["bytes_out"], errors="coerce").fillna(0).astype(np.int64)
     events = events.sort_values("time").reset_index(drop=True)
-    pcs = events[events["source"] == "ad"].groupby("actor_raw")["device"].agg(lambda s: s.mode().iloc[0] if len(s) else None)
+    events = _compact(events)
+    pcs = (
+        events[events["source"] == "ad"]
+        .groupby("actor_raw", observed=True)["device"]
+        .agg(lambda s: s.mode().iloc[0] if len(s) else None)
+    )
     directory["primary_device"] = directory["sid"].map(pcs)
     leases = pd.DataFrame(columns=["ip", "sid", "start", "end"])
     leaves = pd.DataFrame(columns=["sid", "start", "end", "tur"])
