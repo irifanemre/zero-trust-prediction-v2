@@ -242,6 +242,75 @@ class MetricsCollector:
             out.append(int(any(a <= d + horizon_days * DAY and b >= d for a, b in windows.get(r["sid"], []))))
         return out
 
+    def rule_matrix(self, engine: DetectionEngine, last_day: pd.Timestamp) -> List[dict]:
+        """Kural sağlığı ve kapsama matrisi (r5.2 dersi): 22 kuralın yarısı hiç tetiklenmiyor, ama rapor bunu
+        "kural var" diye gösteriyordu. Her kural için ayrı ayrı: kaç kez tetiklendi, kaç KUYRUĞA GİREN vakaya
+        katıldı, bunların kaçı gerçek (etiketli veride cevap anahtarı penceresi), gerektirdiği telemetri ve
+        **doğrulama durumu**. Böylece sınanmamış kural "çalışıyor" diye sunulmaz.
+
+        Durumlar: `dogrulandi` (en az bir gerçek vakaya katıldı) · `kismen` (tetiklendi ama hiç gerçek vakaya
+        katılmadı) · `sinanmadi` (hiç tetiklenmedi; nedeni ayrıca yazılır)."""
+        windows = {g["sid"]: [] for g in self.gt if not g.get("negatif")}
+        for g in self.gt:
+            if not g.get("negatif"):
+                windows[g["sid"]].append(self._window(g))
+        tp_cases: Counter = Counter()
+        fp_cases: Counter = Counter()
+        for sid, alerts in self.alerts_by_sid.items():
+            for day, rules in alerts:
+                real = any(a <= day <= b for a, b in windows.get(sid, []))
+                for rid in rules:
+                    (tp_cases if real else fp_cases)[rid] += 1
+        by_id = {r["id"]: r for r in self.catalog}
+        out: List[dict] = []
+        for rid in sorted(by_id):
+            rule = by_id[rid]
+            hits = int(self.rule_hits.get(rid, 0))
+            tp, fp = int(tp_cases.get(rid, 0)), int(fp_cases.get(rid, 0))
+            if tp:
+                durum, neden = "dogrulandi", ""
+            elif hits:
+                durum, neden = "kismen", "tetiklendi, hiç gerçek vakaya katılmadı"
+            else:
+                durum = "sinanmadi"
+                neden = (
+                    engine.disabled.get(rid)
+                    or ("gölge modda" if rule.get("durum") == "golge-modda" else "")
+                    or (f"kaynak askıda kaldı ({engine.skipped_dq[rid]} gün)" if engine.skipped_dq.get(rid) else "")
+                    or "bu veride desen görülmedi"
+                )
+            last = self.rule_last_hit.get(rid)
+            out.append(
+                dict(
+                    kural=rid,
+                    katman=rule["katman"],
+                    yasam_dongusu=rule["durum"],
+                    tetiklenme=hits,
+                    vaka_gercek=tp,
+                    vaka_yanlis=fp,
+                    katki_payi=round(self.contrib.get(rid, 0.0) / (sum(self.contrib.values()) or 1.0), 4),
+                    son_tetiklenme=str(last.date()) if last is not None else None,
+                    gun_once=(last_day - last).days if last is not None else None,
+                    gerekli_telemetri=list(rule["veri_kaynaklari"]),
+                    dogrulama=durum,
+                    not_=neden,
+                )
+            )
+        return out
+
+    @staticmethod
+    def _matrix_summary(matrix: List[dict]) -> dict:
+        """Tek bakışta: kaç kural gerçekten doğrulandı, kaçı yalnız gürültü üretti, kaçı hiç sınanmadı (ve neden)."""
+        c = Counter(r["dogrulama"] for r in matrix)
+        nedenler = Counter(r["not_"].split(" (")[0] for r in matrix if r["dogrulama"] == "sinanmadi")
+        return dict(
+            kural=len(matrix),
+            dogrulandi=c["dogrulandi"],
+            kismen=c["kismen"],
+            sinanmadi=c["sinanmadi"],
+            sinanmama_nedeni=dict(nedenler),
+        )
+
     def prediction_calibration(self, rows: List[dict], labels: Optional[LabelStore] = None) -> Optional[dict]:
         """19.4/19.5: 7 günlük olasılığın kalibrasyonu (Brier, beceri skoru, AUC, güvenilirlik). Modelsiz hâl (sezgisel) kontrol grubu olarak
         her zaman raporlanır (14.6)."""
@@ -297,6 +366,8 @@ class MetricsCollector:
                 devre_disi=engine.disabled,
                 dq_askida_atlanan=dict(engine.skipped_dq),
                 hatalar=dict(engine.errors),
+                matris=(matrix := self.rule_matrix(engine, last_day)),
+                kapsama_ozeti=self._matrix_summary(matrix),
             ),
             bastirma=dict(
                 bastirilan=len(suppressed_log),

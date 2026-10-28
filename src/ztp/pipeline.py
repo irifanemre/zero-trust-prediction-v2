@@ -436,6 +436,68 @@ class ZeroTrustPredictionPipeline:
         )
 
     # ------------------------------------------------------------------
+    def _counterfactual(self, sid: str, day: pd.Timestamp, r: RiskResult, gf: GraphFindings, s: dict) -> List[dict]:
+        """ "Bu kanıt olmasaydı risk kaç olurdu?" — her kural için skor yeniden hesaplanır.
+
+        Toplamsal katkı listesi (`tespitler[].katki`) bunu gösteremez, çünkü skor ÇARPIMSALDIR: bir tespiti
+        çıkarmak kendi puanını düşürmekle kalmaz, tetiklediği farklı-taktik (×2,5) ya da 3-tespit (×2,0)
+        çarpanını da düşürebilir. Skorlama koduna dokunulmaz: donmuş `RiskScorer.compute` aynı kalır, yalnız
+        o kullanıcının tespit geçmişi geçici olarak süzülüp çağrılır.
+
+        Yüzdelik, günün havuzuyla (bu kullanıcının kendi skoru dahil) yaklaşık hesaplanır; amaç sıralama değil,
+        analiste hangi kanıtın vakayı taşıdığını göstermektir."""
+        cfg = self.cfg
+        pool = np.sort(np.array([v for _, v in self.scorer.pool], dtype=float)) if self.scorer.pool else np.array([])
+
+        def risk_of(raw: float) -> float:
+            pct = float(np.searchsorted(pool, raw, side="left") / len(pool)) if len(pool) else 0.0
+            return 100.0 * (cfg.fusion_temporal_weight * pct + cfg.fusion_structural_weight * gf.structural_score)
+
+        base_risk = risk_of(r.raw)
+        saved = self.scorer.hit_log[sid]
+        out: List[dict] = []
+        for rid in sorted({h.rule_id for h in r.hits}):
+            self.scorer.hit_log[sid] = [h for h in saved if h.rule_id != rid]
+            try:
+                alt = self.scorer.compute(sid, day, s)
+            finally:
+                self.scorer.hit_log[sid] = saved
+            out.append(
+                dict(
+                    kural=rid,
+                    ham_olmadan=round(alt.raw, 1),
+                    ham_dusus_yuzde=int(round(100 * (r.raw - alt.raw) / r.raw)) if r.raw else 0,
+                    risk_olmadan=int(round(risk_of(alt.raw))),
+                    risk_dusus=int(round(base_risk - risk_of(alt.raw))),
+                    kaybolan_carpanlar=sorted(set(r.multipliers) - set(alt.multipliers)),
+                )
+            )
+        # Sıralama ham skordaki düşüşe göre: yüzdelik üst uçta doygundur (kurumun en riskli kullanıcısında
+        # kanıt çıkarmak yüzdeliği az oynatır), ham skor ise kanıtın gerçek ağırlığını gösterir.
+        return sorted(out, key=lambda d: -d["ham_dusus_yuzde"])
+
+    def _confidence(self, sid: str, day: pd.Timestamp, s: dict, dq: dict) -> dict:
+        """Skorun yanında GÜVEN: 'risk 82' ile 'risk 82, güven düşük' aynı şey değildir.
+
+        Düşüren etkenler: askıya alınmış kaynak (o gün o telemetri yok), kısa kişisel profil (baseline oturmamış),
+        küçük akran grubu (karşılaştırma zayıf), zehirleme şüphesi (kısa pencere uzun pencereden kopmuş).
+        Mimarideki veri kalitesi katmanı kuralı tamamen susturur; bu alan ise susturulmayan vakanın ne kadar
+        sağlam zemine bastığını analiste söyler (9. madde)."""
+        reasons: List[str] = []
+        askida = [k for k, v in (dq or {}).items() if v.get("durum") == "askida"]
+        if askida:
+            reasons.append(f"askıda kaynak: {', '.join(sorted(askida))}")
+        profil = int(s.get("profil_gun", 0) or 0)
+        if profil < 30:
+            reasons.append(f"kişisel profil {profil} gün (<30)")
+        akran = sum(1 for v in self.peers.key_of.values() if v == self.peers.key(sid))
+        if akran and akran < self.cfg.min_peer_group:
+            reasons.append(f"akran grubu {akran} kişi (<{self.cfg.min_peer_group})")
+        if s.get("zehirleme_suphesi"):
+            reasons.append("zehirleme şüphesi: 7g medyanı 90g'den kopuk")
+        seviye = "yuksek" if not reasons else ("dusuk" if len(reasons) >= 2 or askida else "orta")
+        return dict(seviye=seviye, nedenler=reasons)
+
     def _build_case(self, sid: str, day: pd.Timestamp, r: RiskResult, gf: GraphFindings, s: dict, ex: dict, evid: dict) -> dict:
         cfg = self.cfg
         pseudo = self.pseud.pseudo(sid)
@@ -460,6 +522,7 @@ class ZeroTrustPredictionPipeline:
                     runbook=h.runbook,
                 )
             )
+        counterfactual = self._counterfactual(sid, day, r, gf, s)
         timeline = []
         if ex.get("rejim_degisimi"):
             timeline.append(f"{s.get('rejim_degisim_gun')} gün önce — {ex['rejim_degisimi']}")
@@ -496,6 +559,8 @@ class ZeroTrustPredictionPipeline:
                 ortak_noktalar=gf.common_points,
                 teknikler=gf.techniques,
             ),
+            karsit_olgu=counterfactual,
+            guven=self._confidence(sid, day, s, self.dq_last),
             zaman_cizelgesi=timeline,
             kanit_serileri={k: v for k, v in evid.items() if k in ("risk_serisi", "rejim", "yetki", "silence")},
             mudahale=tiered_response(combined, r.critical),

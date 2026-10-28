@@ -28,7 +28,7 @@ class TemplateReporter:
             + "│"
         )
         L.append(
-            f"│ Yüzdelik: %{case['yuzdelik'] * 100:.1f}  |  Ham: {case['ham_skor']:.1f}  |  Yapısal: {case['yapisal_skor']:.2f}  |  7g tahmin: %{case['tahmin_7g']['olasilik'] * 100:.0f}  |  Kritik: {'EVET' if case['kritik'] else 'hayır'}".ljust(
+            f"│ Yüzdelik: %{case['yuzdelik'] * 100:.1f}  |  Ham: {case['ham_skor']:.1f}  |  Yapısal: {case['yapisal_skor']:.2f}  |  7g tahmin: %{case['tahmin_7g']['olasilik'] * 100:.0f}  |  Kritik: {'EVET' if case['kritik'] else 'hayır'}  |  Güven: {(case.get('guven') or {}).get('seviye', '—')}".ljust(
                 w + 1
             )
             + "│"
@@ -41,6 +41,18 @@ class TemplateReporter:
                 + (f" → {h['runbook']}" if h.get("runbook") else "")
                 + "│"
             )
+        if case.get("karsit_olgu"):
+            L.append("│  KANIT AĞIRLIĞI (bu kanıt olmasaydı ham skor):".ljust(w + 1) + "│")
+            for k in case["karsit_olgu"][:4]:
+                carp = f" [çarpan kaybı: {', '.join(k['kaybolan_carpanlar'])}]" if k["kaybolan_carpanlar"] else ""
+                L.append(
+                    f"│    {k['kural']}: {case['ham_skor']:.1f} → {k['ham_olmadan']:.1f} (−%{k['ham_dusus_yuzde']}), "
+                    f"risk {case['risk']} → {k['risk_olmadan']}{carp}".ljust(w + 1)
+                    + "│"
+                )
+        guv = case.get("guven") or {}
+        if guv.get("nedenler"):
+            L.append(f"│  ⚠ Güven {guv.get('seviye')}: {'; '.join(guv['nedenler'])}".ljust(w + 1) + "│")
         if case["carpanlar"]:
             L.append("│  Çarpanlar: " + ", ".join(f"{k} ×{v}" for k, v in case["carpanlar"].items()).ljust(w - 13) + "│")
         ex = case["baglam"]
