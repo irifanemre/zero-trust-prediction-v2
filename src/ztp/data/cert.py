@@ -157,8 +157,12 @@ def _url_category(url: str) -> Optional[str]:
 #   cmdline           → features.py `.fillna("")` çağırıyor; kategorik kolonda kategori listesinde olmayan değerle
 #                       fillna ValueError verir.
 #   event_id          → her satırda benzersiz, kategorik kazanç yok.
+#   source            → quality.py:32 `groupby(["source","day"])` — DONMUŞ dosya, observed=True eklenemez. Kategorik
+#                       olsaydı o gün hiç olay görmemiş kaynak için de satır üretilir (n=0, late=NaN) ve veri kalitesi
+#                       metrikleri sessizce değişirdi. Bekçi: tests/test_bellek_optimizasyonu.py.
+# Donmamış tüketicilerde (graph/observation.py) anahtarlar `observed=True` ile gruplanır; bu, nesne dtype'ıyla
+# birebir aynı sonucu verir. Kural AST ile sınanır, yoruma bırakılmaz.
 COMPACT_CATEGORICAL = (
-    "source",
     "action",
     "outcome",
     "app",

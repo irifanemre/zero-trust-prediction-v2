@@ -32,7 +32,9 @@ class ObservationGraphBuilder:
             sub = ev[ev[col].notna()]
             if sub.empty:
                 continue
-            agg = sub.groupby(["canonical", col]).agg(
+            # observed=True: anahtar kategorik olduğunda (resource/app/country/src_ip) o gün görülmeyen kategoriler
+            # için hayalet kenar üretilmesini önler; nesne dtype'ıyla birebir aynı sonucu verir.
+            agg = sub.groupby(["canonical", col], observed=True).agg(
                 count=("event_id", "size"), first_ts=("time", "min"), last_ts=("time", "max")
             )
             for (sid, val), r in agg.iterrows():
@@ -42,7 +44,9 @@ class ObservationGraphBuilder:
         # cihaz → süreç (LOLBins: süreç adı değil ebeveyn-çocuk ilişkisi izlenir, 2.3)
         edr = ev[(ev["source"] == "edr") & ev["process"].notna()]
         if not edr.empty:
-            agg = edr.groupby(["device", "process", "parent_process"]).agg(count=("event_id", "size"), first_ts=("time", "min"))
+            agg = edr.groupby(["device", "process", "parent_process"], observed=True).agg(
+                count=("event_id", "size"), first_ts=("time", "min")
+            )
             for (dev, proc, parent), r in agg.iterrows():
                 self.store.add_edge(
                     f"device:{dev}", f"process:{parent}>{proc}", "calistirdi", r["first_ts"], count=int(r["count"])
