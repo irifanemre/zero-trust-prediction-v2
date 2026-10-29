@@ -46,7 +46,7 @@ PLAN = REPO / "docs" / "kor-kosu-plani.md"
 MODEL = REPO / "configs" / "models" / "kor-r52-birincil-lr.json"
 SPLIT = REPO / "configs" / "splits" / "cert-r5.2-kullanici-bolmesi.json"
 SAMPLE = REPO / "configs" / "splits" / "cert-r5.2-orneklem.json"  # plan §3.2 (f, katmanlı, tohum 42)
-WARMUP, DAYS, BUDGET, KS = 21, 90, 10, (1, 3, 5, 10)
+WARMUP, DAYS, BUDGET, KS = 21, 90, 10, (1, 3, 5, 10)  # BUDGET varsayılanı; --budget ile ezilir (r6.2: 30)
 
 
 def git(*a: str) -> str:
@@ -68,7 +68,7 @@ def run_window(i: int, w: dict, args: argparse.Namespace, out: Path) -> dict:
     mem = PeakMemory()
     t0 = time.perf_counter()
     start, end = pd.Timestamp(w["baslangic"]), pd.Timestamp(w["bitis"])
-    cfg = TenantConfig(tenant_id=f"cert-r52-p{i}", alarm_budget_per_day=BUDGET)
+    cfg = TenantConfig(tenant_id=f"cert-r{args.surum}-p{i}", alarm_budget_per_day=args.budget)
     start_hist = end - (cfg.long_window_days + WARMUP + DAYS) * DAY
     data = load_cert_dataset(args.cert_dir, start_hist, end, answers_dir=args.answers_dir, only_users=args.users)
     cfg.available_sources = tuple(sorted(set(data.events["source"].unique()) | {"hr"}))
@@ -354,6 +354,8 @@ def main() -> int:
     ap.add_argument("--devam", action="store_true", help="teknik hatadan sonra biten pencereleri atla")
     ap.add_argument("--dondurma", default=str(FREEZE), help="kural dondurma manifesti (v2 geliştirme koşusu için v2)")
     ap.add_argument("--tur", default="kör koşu", help="koşu türü etiketi (ör. 'geliştirme koşusu (70/15/15)')")
+    ap.add_argument("--budget", type=int, default=BUDGET, help="alarm bütçesi (r5.2: 10, r6.2: 30)")
+    ap.add_argument("--plan", default=str(PLAN), help="ön kayıt planı (commit karması kayda geçer)")
     ap.add_argument("--sinama", action="store_true", help="sürücü sınaması (r4.2): yalnız son pencere, temiz ağaç şartı yok")
     args = ap.parse_args()
     args.answers_dir = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
@@ -366,6 +368,7 @@ def main() -> int:
     )
     t0 = time.perf_counter()
     release = Path(args.cert_dir).name.lstrip("r")
+    args.surum = release.replace(".", "")
     sample_path = Path(args.orneklem) if args.orneklem else (SAMPLE if release == "5.2" else None)
     sample = json.loads(sample_path.read_text(encoding="utf-8")) if sample_path else None
     args.users = sample["kullanicilar"] if sample else None
@@ -378,7 +381,7 @@ def main() -> int:
             tur=args.tur,
             head=git("rev-parse", "HEAD"),
             etiketler=git("tag", "--points-at", "HEAD").split(),
-            plan_commit=git("log", "-1", "--format=%H", "--", str(PLAN.relative_to(REPO))),
+            plan_commit=git("log", "-1", "--format=%H", "--", str(Path(args.plan).relative_to(REPO))),
             model_sha256=sha256_file(MODEL),
             bolme_sha256=sha256_file(Path(args.split)),
             orneklem=dict(dosya=sample_path.name, sha256=sha256_file(sample_path), **sample["meta"]) if sample else None,
@@ -393,7 +396,11 @@ def main() -> int:
     keep = keep[::-1]  # zaman sırasıyla
     if args.sinama:
         keep = keep[-1:]
-    res["kayit"].update(D0=str(d0.date()), D1=str(d1.date()), pencere_komutu="--days 90 --warmup 21 --budget 10 --no-variants")
+    res["kayit"].update(
+        D0=str(d0.date()),
+        D1=str(d1.date()),
+        pencere_komutu=f"--days {DAYS} --warmup {WARMUP} --budget {args.budget} --no-variants",
+    )
     write_summary(res, out)
     LOG.info("Kör koşu: D0=%s D1=%s, %d pencere, atlanan %s", d0.date(), d1.date(), len(keep), skipped)
     wins = []
