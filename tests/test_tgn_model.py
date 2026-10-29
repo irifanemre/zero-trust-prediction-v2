@@ -99,11 +99,27 @@ def test_kendi_riski_geri_donmez():
 def test_herkesin_dokundugu_varlik_zayif_sinyal():
     """Paylaşım genişse mesaj zayıflar: ortak yazıcı, kişiye özel sunucu kadar bilgi taşımaz."""
     dar = _graf([(0, "R", "cihaz", "PC"), (0, "K", "cihaz", "PC")])
-    genis = _graf([(0, "R", "cihaz", "PC")] + [(0, f"K{i}", "cihaz", "PC") for i in range(50)])
+    orta = _graf([(0, "R", "cihaz", "PC")] + [(0, f"K{i}", "cihaz", "PC") for i in range(9)])
     d = risk_yayilimi(dar, {"R": 1.0}, _g(-1), _g(1), adim=1)
-    gns = risk_yayilimi(genis, {"R": 1.0}, _g(-1), _g(1), adim=1)
-    # dar paylaşımda tek komşu tüm mesajı alır; geniş paylaşımda mutlak pay çok daha küçüktür
-    assert d["K"] == 1.0 and len(gns) == 50
+    o = risk_yayilimi(orta, {"R": 1.0}, _g(-1), _g(1), adim=1)
+    assert d["K"] == 1.0  # tek komşu tüm mesajı alır
+    assert len(o) == 9 and all(v > 0 for v in o.values())  # 9 komşuya bölünür
+
+
+def test_kalabalik_hedef_yayilimda_atlanir():
+    """Üst sınırı aşan hedef hiç materyalize edilmez: mesaj zaten akran sayısına bölündüğü için ihmal
+    edilebilir, ama maliyeti ihmal edilebilir değil (r6.2'de site:web'e 2761 kullanıcı dokunuyor)."""
+    kalabalik = _graf([(0, "R", "cihaz", "PC")] + [(0, f"K{i}", "cihaz", "PC") for i in range(60)])
+    assert risk_yayilimi(kalabalik, {"R": 1.0}, _g(-1), _g(1), adim=1, akran_ust_siniri=50) == {}
+    gevsek = risk_yayilimi(kalabalik, {"R": 1.0}, _g(-1), _g(1), adim=1, akran_ust_siniri=100)
+    assert len(gevsek) == 60  # sınır yükseltilince yine yayılır
+
+
+def test_yayilim_ust_siniri_seyrek_hedefi_etkilemez():
+    """Asıl ilgilendiğimiz seyrek paylaşımlar sınırdan etkilenmemeli."""
+    g = _graf([(0, "R", "kaynak", "gizli"), (0, "K", "kaynak", "gizli")])
+    for sinir in (2, 50, 1000):
+        assert risk_yayilimi(g, {"R": 1.0}, _g(-1), _g(1), adim=1, akran_ust_siniri=sinir)["K"] == 1.0
 
 
 def test_tohum_yoksa_yayilim_bos():

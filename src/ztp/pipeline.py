@@ -198,8 +198,25 @@ class ZeroTrustPredictionPipeline:
                 self.graph_builder.ingest_day(ev)
         self.health.time("graf_olusturma", t0)
         day = start - warmup_days * DAY
+        # Isınma günleri vaka üretmediği için hiç log basmıyordu; uzun koşularda bu, hızın kabul edilebilir
+        # olup olmadığını saatlerce görünmez kılıyor. İlerleme her 5 günde bir, gün başına ölçülen süreyle
+        # birlikte yazılır — yavaşlık koşunun ilk dakikalarında fark edilsin.
+        ilerleme_t0 = time.perf_counter()
+        islenen = 0
+        toplam_gun = int((end - day).days) + 1
         while day <= end:
             self._run_day(day, produce_cases=day >= start)
+            islenen += 1
+            if islenen % 5 == 0:
+                gecen = time.perf_counter() - ilerleme_t0
+                LOG.info(
+                    "İlerleme: %d/%d gün (%s), %.1f sn/gün, tahmini kalan %.0f dk",
+                    islenen,
+                    toplam_gun,
+                    "ısınma" if day < start else "değerlendirme",
+                    gecen / islenen,
+                    gecen / islenen * (toplam_gun - islenen) / 60,
+                )
             day += DAY
         self._write_outputs(end)
         if self.state is not None:

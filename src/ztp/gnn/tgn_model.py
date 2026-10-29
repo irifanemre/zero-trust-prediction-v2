@@ -45,6 +45,11 @@ VARSAYILAN_GECMIS_GUN = 30
 VARSAYILAN_ADIM = 2
 VARSAYILAN_SONUM = 0.5
 SEYREK_ESIK = 3  # bu sayıdan az akranın dokunduğu hedef "seyrek" sayılır
+# Yayılımda atlanan hedefin akran sayısı. Mesaj zaten akran sayısına BÖLÜNDÜĞÜ için kalabalık bir hedeften
+# gelen katkı ihmal edilebilir (50 akranda tohumun %1'i, 2761 akranda %0,018'i). Ama maliyeti ihmal edilebilir
+# değil: r6.2'de `site:web` hedefine 2761 kullanıcı dokunuyor ve her tohum için o kümenin tamamı geziliyordu.
+# Ölçüldü: bu sınır olmadan gün başına >3,5 dakika, r4.2'de (977 kullanıcı) 28 saniye.
+YAYILIM_AKRAN_UST_SINIRI = 50
 
 
 @dataclass
@@ -111,6 +116,7 @@ def risk_yayilimi(
     t1: pd.Timestamp,
     adim: int = VARSAYILAN_ADIM,
     sonum: float = VARSAYILAN_SONUM,
+    akran_ust_siniri: int = YAYILIM_AKRAN_UST_SINIRI,
 ) -> Dict[str, float]:
     """RiskScore-Guided GNN (revizeler2.txt §3): davranışsal riski paylaşılan varlıklar üzerinden yayar.
 
@@ -128,14 +134,19 @@ def risk_yayilimi(
     # A→hedef→B→hedef2→A yolu A'nın riskini A'ya geri verir ve kullanıcı kendi riskini kendisi pekiştirir.
     mevcut: Dict[str, Dict[str, float]] = {sid: {sid: float(r)} for sid, r in tohum_riskleri.items() if r}
     birikim: Dict[str, float] = {}
-    komsu_onbellek: Dict[Tuple[str, str], Set[str]] = {}
+    komsu_onbellek: Dict[Tuple[str, str], "Set[str] | frozenset"] = {}
     for _ in range(adim):
         sonraki: Dict[str, Dict[str, float]] = {}
         for sid, paketler in mevcut.items():
             for tur, hedef in graf.komsular(sid, t0, t1):
                 anahtar = (tur, hedef)
                 if anahtar not in komsu_onbellek:
-                    komsu_onbellek[anahtar] = graf.hedefe_dokunan_kullanicilar(tur, hedef, t0, t1)
+                    # Önce UCUZ kontrol: sınırı aşan hedef hiç materyalize edilmez. Erken çıkışlı sayım,
+                    # 2761 kişilik bir kümeyi kurmak yerine 51. kullanıcıyı görünce durur.
+                    if graf.akran_sayisi(tur, hedef, t0, t1, en_fazla=akran_ust_siniri + 1) > akran_ust_siniri:
+                        komsu_onbellek[anahtar] = frozenset()  # kalabalık: yayılımda bilgi taşımaz
+                    else:
+                        komsu_onbellek[anahtar] = graf.hedefe_dokunan_kullanicilar(tur, hedef, t0, t1)
                 akranlar = komsu_onbellek[anahtar] - {sid}
                 if not akranlar:
                     continue
