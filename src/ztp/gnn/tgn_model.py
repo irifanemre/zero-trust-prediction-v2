@@ -179,6 +179,7 @@ class TemporalGraphBaseline:
         kullanici: str,
         gun: pd.Timestamp,
         tohum_riskleri: Optional[Mapping[str, float]] = None,
+        akran_onbellek: Optional[Dict[Tuple[str, str], int]] = None,
     ) -> GrafSinyalleri:
         gun = pd.Timestamp(gun).normalize()
         gun_sonu = gun + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
@@ -194,11 +195,19 @@ class TemporalGraphBaseline:
         yeni = bugun - gecmis_komsu
         yenilik = len(yeni) / len(bugun)
 
+        # Akran sayısı hedefe özgüdür, kullanıcıya değil: aynı gün içinde yüzlerce kullanıcı aynı siteye
+        # dokunuyor. Önbelleksiz her kullanıcı için yeniden hesaplanıyordu — ölçümde gün başına 57 sn.
         seyrek: list = []
         for tur, hedef in sorted(bugun):
-            akran = graf.hedefe_dokunan_kullanicilar(tur, hedef, gecmis_bas, gun_sonu)
-            if len(akran) < self.seyrek_esik:
-                seyrek.append((tur, hedef))
+            anahtar = (tur, hedef)
+            if akran_onbellek is not None and anahtar in akran_onbellek:
+                sayi = akran_onbellek[anahtar]
+            else:
+                sayi = len(graf.hedefe_dokunan_kullanicilar(tur, hedef, gecmis_bas, gun_sonu))
+                if akran_onbellek is not None:
+                    akran_onbellek[anahtar] = sayi
+            if sayi < self.seyrek_esik:
+                seyrek.append(anahtar)
         seyreklik = len(seyrek) / len(bugun)
 
         tur_kaymasi = _l1_mesafe(
@@ -230,7 +239,9 @@ class TemporalGraphBaseline:
         gun: pd.Timestamp,
         tohum_riskleri: Optional[Mapping[str, float]] = None,
     ) -> Dict[str, GrafSinyalleri]:
-        return {sid: self.hesapla(graf, sid, gun, tohum_riskleri) for sid in kullanicilar}
+        """Bir günün tüm kullanıcıları. Akran sayıları gün içinde bir kez hesaplanır ve paylaşılır."""
+        onbellek: Dict[Tuple[str, str], int] = {}
+        return {sid: self.hesapla(graf, sid, gun, tohum_riskleri, onbellek) for sid in kullanicilar}
 
     @staticmethod
     def sinyal_adlari() -> Tuple[str, ...]:

@@ -30,11 +30,11 @@ Varsayılan olarak hiçbir skora katılmaz; üretilen sinyaller `gnn/tgn_model.p
 
 from __future__ import annotations
 
-import bisect
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+import numpy as np
 import pandas as pd
 
 # (olay kolonu, hedef düğüm türü, ilişki türü) — CERT ve OCSF şemasının ortak alanları
@@ -48,9 +48,9 @@ KENAR_SEMASI: Tuple[Tuple[str, str, str], ...] = (
 MEDYA_EYLEMLERI = ("usb_copy", "removable_copy")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Kenar:
-    """Tek bir zaman damgalı etkileşim."""
+    """Tek bir zaman damgalı etkileşim. `slots`: 13M+ kenarda sözlük yükü ~40 bayt/nesne tasarruf eder."""
 
     zaman: pd.Timestamp
     kaynak: str  # kullanıcı (canonical sid)
@@ -66,6 +66,10 @@ class TemporalHeteroGraph:
     _kullanici_kenarlari: Dict[str, List[Kenar]] = field(default_factory=lambda: defaultdict(list))
     _hedef_kullanicilari: Dict[Tuple[str, str], List[Tuple[pd.Timestamp, str]]] = field(default_factory=lambda: defaultdict(list))
     _sirali: bool = False
+    # Zaman dizileri `sonlandir()`'da BİR KEZ kurulur. Sorgu başına yeniden kurmak O(n) maliyet demekti ve
+    # gerçek veride (13M+ olay, 90 gün × ~1000 kullanıcı sorgu) ikinci dereceden davranışa yol açıyordu.
+    _kullanici_zaman: Dict[str, "np.ndarray"] = field(default_factory=dict, repr=False)
+    _hedef_zaman: Dict[Tuple[str, str], "np.ndarray"] = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------ kurulum
     def ekle(self, kenar: Kenar) -> None:
@@ -74,11 +78,15 @@ class TemporalHeteroGraph:
         self._sirali = False
 
     def sonlandir(self) -> "TemporalHeteroGraph":
-        """Sorgulardan önce bir kez çağrılır: listeler zamana göre sıralanır (ikili arama için şart)."""
-        for liste in self._kullanici_kenarlari.values():
+        """Sorgulardan önce bir kez çağrılır: listeler sıralanır ve zaman dizileri (int64 ns) kurulur."""
+        self._kullanici_zaman.clear()
+        self._hedef_zaman.clear()
+        for sid, liste in self._kullanici_kenarlari.items():
             liste.sort(key=lambda k: k.zaman)
-        for liste in self._hedef_kullanicilari.values():
+            self._kullanici_zaman[sid] = np.fromiter((k.zaman.value for k in liste), dtype=np.int64, count=len(liste))
+        for anahtar, liste in self._hedef_kullanicilari.items():
             liste.sort(key=lambda t: t[0])
+            self._hedef_zaman[anahtar] = np.fromiter((t.value for t, _ in liste), dtype=np.int64, count=len(liste))
         self._sirali = True
         return self
 
@@ -110,17 +118,24 @@ class TemporalHeteroGraph:
         return g.sonlandir()
 
     # ------------------------------------------------------------------ sorgular
-    def _dilim(self, liste: Sequence, t0: Optional[pd.Timestamp], t1: Optional[pd.Timestamp], anahtar) -> Sequence:
+    def _dilim(self, liste: Sequence, zamanlar: "np.ndarray", t0, t1) -> Sequence:
+        """Önceden kurulmuş int64 zaman dizisinde ikili arama — sorgu başına O(log n)."""
         if not self._sirali:
             raise RuntimeError("sonlandir() çağrılmadan sorgu yapılamaz")
-        zamanlar = [anahtar(x) for x in liste]
-        bas = bisect.bisect_left(zamanlar, t0) if t0 is not None else 0
-        son = bisect.bisect_right(zamanlar, t1) if t1 is not None else len(liste)
+        if not len(liste):
+            return []
+        bas = int(np.searchsorted(zamanlar, pd.Timestamp(t0).value, "left")) if t0 is not None else 0
+        son = int(np.searchsorted(zamanlar, pd.Timestamp(t1).value, "right")) if t1 is not None else len(liste)
         return liste[bas:son]
 
     def kenarlar(self, kullanici: str, t0: Optional[pd.Timestamp] = None, t1: Optional[pd.Timestamp] = None) -> List[Kenar]:
         """Kullanıcının `[t0, t1]` aralığındaki kenarları (uçlar dahil)."""
-        return list(self._dilim(self._kullanici_kenarlari.get(kullanici, []), t0, t1, lambda k: k.zaman))
+        if not self._sirali:
+            raise RuntimeError("sonlandir() çağrılmadan sorgu yapılamaz")
+        liste = self._kullanici_kenarlari.get(kullanici, [])
+        if not liste:
+            return []
+        return list(self._dilim(liste, self._kullanici_zaman[kullanici], t0, t1))
 
     def komsular(
         self,
@@ -143,8 +158,13 @@ class TemporalHeteroGraph:
         self, hedef_tur: str, hedef: str, t0: Optional[pd.Timestamp] = None, t1: Optional[pd.Timestamp] = None
     ) -> Set[str]:
         """Akran seyrekliği için: bu hedefe `[t0, t1]` içinde kaç farklı kullanıcı dokundu."""
-        dilim = self._dilim(self._hedef_kullanicilari.get((hedef_tur, hedef), []), t0, t1, lambda x: x[0])
-        return {sid for _, sid in dilim}
+        if not self._sirali:
+            raise RuntimeError("sonlandir() çağrılmadan sorgu yapılamaz")
+        anahtar = (hedef_tur, hedef)
+        liste = self._hedef_kullanicilari.get(anahtar, [])
+        if not liste:
+            return set()
+        return {sid for _, sid in self._dilim(liste, self._hedef_zaman[anahtar], t0, t1)}
 
     def yeni_komsular(
         self, kullanici: str, t0: pd.Timestamp, t1: pd.Timestamp, gecmis_baslangic: Optional[pd.Timestamp] = None
