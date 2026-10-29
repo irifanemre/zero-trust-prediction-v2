@@ -381,7 +381,7 @@ def main() -> int:
             tur=args.tur,
             head=git("rev-parse", "HEAD"),
             etiketler=git("tag", "--points-at", "HEAD").split(),
-            plan_commit=git("log", "-1", "--format=%H", "--", str(Path(args.plan).relative_to(REPO))),
+            plan_commit=git("log", "-1", "--format=%H", "--", str(Path(args.plan).resolve().relative_to(REPO))),
             model_sha256=sha256_file(MODEL),
             bolme_sha256=sha256_file(Path(args.split)),
             orneklem=dict(dosya=sample_path.name, sha256=sha256_file(sample_path), **sample["meta"]) if sample else None,
