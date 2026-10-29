@@ -30,6 +30,18 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kor_kosu_hazirlik import PeakMemory, logon_bounds, sha256_file, windows_from_bounds  # noqa: E402
 
+# v4 bileşenleri (revizeler.txt / revizeler2.txt). --ac ile açılır; AÇIKKEN KOŞU KÖR SAYILMAZ, çünkü bu
+# bileşenlerin ayarları r4.2 ölçümü görülerek seçildi. Çıktıda `tur` alanı bunu kayda geçirir.
+HEPSI_ACIK = dict(
+    graf_enabled=True,
+    graf_agirligi=0.5,
+    adwin_enabled=True,
+    bayes_kapi_esigi=0.3,
+    belirsizlik_enabled=True,
+    kanit_dogrulama="dengeli",
+    cok_ajanli_rapor=True,
+)
+
 from ztp.config import TenantConfig  # noqa: E402
 from ztp.data.cert import load_cert_dataset  # noqa: E402
 from ztp.detection.catalog import load_catalog  # noqa: E402
@@ -68,7 +80,8 @@ def run_window(i: int, w: dict, args: argparse.Namespace, out: Path) -> dict:
     mem = PeakMemory()
     t0 = time.perf_counter()
     start, end = pd.Timestamp(w["baslangic"]), pd.Timestamp(w["bitis"])
-    cfg = TenantConfig(tenant_id=f"cert-r{args.surum}-p{i}", alarm_budget_per_day=args.budget)
+    ek = HEPSI_ACIK if getattr(args, "ac", False) else {}
+    cfg = TenantConfig(tenant_id=f"cert-r{args.surum}-p{i}", alarm_budget_per_day=args.budget, **ek)
     start_hist = end - (cfg.long_window_days + WARMUP + DAYS) * DAY
     data = load_cert_dataset(args.cert_dir, start_hist, end, answers_dir=args.answers_dir, only_users=args.users)
     cfg.available_sources = tuple(sorted(set(data.events["source"].unique()) | {"hr"}))
@@ -356,6 +369,7 @@ def main() -> int:
     ap.add_argument("--tur", default="kör koşu", help="koşu türü etiketi (ör. 'geliştirme koşusu (70/15/15)')")
     ap.add_argument("--budget", type=int, default=BUDGET, help="alarm bütçesi (r5.2: 10, r6.2: 30)")
     ap.add_argument("--plan", default=str(PLAN), help="ön kayıt planı (commit karması kayda geçer)")
+    ap.add_argument("--ac", action="store_true", help="v4 bileşenlerini aç (koşu KÖR sayılmaz)")
     ap.add_argument("--sinama", action="store_true", help="sürücü sınaması (r4.2): yalnız son pencere, temiz ağaç şartı yok")
     args = ap.parse_args()
     args.answers_dir = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
@@ -379,6 +393,7 @@ def main() -> int:
             freeze=freeze_check(Path(args.dondurma)),
             dondurma=Path(args.dondurma).name,
             tur=args.tur,
+            v4_bilesenleri=HEPSI_ACIK if args.ac else None,
             head=git("rev-parse", "HEAD"),
             etiketler=git("tag", "--points-at", "HEAD").split(),
             plan_commit=git("log", "-1", "--format=%H", "--", str(Path(args.plan).resolve().relative_to(REPO))),
