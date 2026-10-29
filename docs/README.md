@@ -1,6 +1,6 @@
 # Belgeler
 
-Beş belge var. Hepsinin ayrı bir işi var; hangisini ne zaman okuyacağın aşağıda.
+Altı belge var. Hepsinin ayrı bir işi var; hangisini ne zaman okuyacağın aşağıda.
 
 ## Okuma sırası
 
@@ -15,6 +15,7 @@ Beş belge var. Hepsinin ayrı bir işi var; hangisini ne zaman okuyacağın aş
 | [`cert-r42-r52-karsilastirma.md`](cert-r42-r52-karsilastirma.md) | 96 | Aynı kurallar iki ayrı CERT kurumunda, 70/15/15 bölmeyle. Sonuç rakamları burada. |
 | [`kor-kosu-r52-plani.md`](kor-kosu-r52-plani.md) | 197 | **Ön kayıt** — r5.2 koşusundan önce yazıldı. |
 | [`kor-kosu-r62-plani.md`](kor-kosu-r62-plani.md) | 222 | **Ön kayıt** — r6.2 koşusundan önce yazıldı. |
+| [`kor-kosu-r62-sonuclar.md`](kor-kosu-r62-sonuclar.md) | — | r6.2 kör koşu sonuçları (29 Ekim 2026): yakalama, yanlış alarm, kural sağlığı, r4.2/r5.2/r6.2 karşılaştırması ve sapma kaydı. |
 
 ## Ön kayıt belgeleri neden var
 
@@ -42,6 +43,7 @@ gerekçe değil.
 | r5.2 ön kaydı yazıldı | `7792965` | 8 Ekim 2026, 20:27 |
 | r5.2 kör koşu sonuçları | `d64c958` | 27 Ekim 2026, 14:53 |
 | r6.2 ön kaydı yazıldı | `21bc41c` | 28 Ekim 2026 |
+| r6.2 kör koşusu yapıldı | HEAD `0ed0472` | 29 Ekim 2026 |
 
 Dondurma ve ön kayıt, r5.2 sonuçlarından **19 gün önce**dir.
 
