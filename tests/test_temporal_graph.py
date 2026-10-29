@@ -123,3 +123,37 @@ def test_akran_sayisi_erken_cikis(graf):
 def test_akran_sayisi_hedefe_dokunanlarla_tutarli(graf):
     for tur, hedef in (("kaynak", "rapor.docx"), ("cihaz", "PC-1"), ("kaynak", "maas.xlsx")):
         assert graf.akran_sayisi(tur, hedef) == len(graf.hedefe_dokunan_kullanicilar(tur, hedef))
+
+
+def test_kirp_eski_kenarlari_atar_sorgulari_bozmaz(graf):
+    """Kayan pencere: eşikten eski kenarlar atılır, eşik SONRASI sorgular birebir aynı kalır."""
+    once = {sid: graf.komsular(sid, _t(5), _t(7)) for sid in graf.kullanicilar}
+    tur_once = graf.tur_dagilimi("U1", _t(5), _t(7))
+    atilan = graf.kirp(_t(5))
+    assert atilan > 0
+    assert {sid: graf.komsular(sid, _t(5), _t(7)) for sid in graf.kullanicilar} == once
+    assert graf.tur_dagilimi("U1", _t(5), _t(7)) == tur_once
+    assert graf.akran_sayisi("cihaz", "PC-1", _t(5), _t(7)) == len(
+        graf.hedefe_dokunan_kullanicilar("cihaz", "PC-1", _t(5), _t(7))
+    )
+
+
+def test_kirp_eski_veriyi_gercekten_siler(graf):
+    assert ("kaynak", "rapor.docx") in graf.komsular("U1")  # 0. günde
+    graf.kirp(_t(5))
+    assert ("kaynak", "rapor.docx") not in graf.komsular("U1")
+    assert graf.kenar_sayisi < 7
+
+
+def test_kirp_tamami_atilan_hedefi_kaldirir(graf):
+    graf.kirp(_t(100))
+    assert graf.kenar_sayisi == 0
+    assert graf.komsular("U1") == set()
+    assert graf.akran_sayisi("cihaz", "PC-1") == 0
+
+
+def test_kirp_sonlandirilmadan_reddedilir():
+    g = TemporalHeteroGraph()
+    g.ekle(Kenar(_t(0), "U1", "cihaz", "PC-1", "kullandi"))
+    with pytest.raises(RuntimeError):
+        g.kirp(_t(1))

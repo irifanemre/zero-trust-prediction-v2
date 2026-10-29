@@ -169,7 +169,11 @@ class ZeroTrustPredictionPipeline:
         self.events_by_day = {k: g for k, g in self.events.groupby(self.events["time"].dt.normalize())}
         if self.cfg.graf_enabled:  # v4 (§1.1): temporal heterogeneous graph pencere başına bir kez kurulur
             t0 = time.perf_counter()
-            self.tgraph = TemporalHeteroGraph.olaylardan(self.events)
+            # Graf yalnız SORGULANACAK aralıktan kurulur. Boru hattı ısınma ve baz çizgisi için çok daha uzun
+            # bir tarihçe yükler (r6.2: 201 gün), ama sinyaller en fazla `graf_gecmis_gun` geriye bakar.
+            # Tarihçenin tamamını grafa koymak r6.2'de ~29 GB, yalnız sorgulanan aralık ~17 GB demekti.
+            graf_bas = start - (self.cfg.graf_gecmis_gun + warmup_days + 1) * DAY
+            self.tgraph = TemporalHeteroGraph.olaylardan(self.events, baslangic=graf_bas)
             self.health.time("temporal_graf", t0)
             LOG.info("Temporal graf: %s", json.dumps(self.tgraph.ozet(), ensure_ascii=False))
         LOG.info(
@@ -392,6 +396,13 @@ class ZeroTrustPredictionPipeline:
         # v4 (§1.1/§3): graf sinyalleri. Tohum = günün ham UEBA riski; yayılım paylaşılan varlıklar üzerinden.
         if self.tgnn is not None and self.tgraph is not None:
             tg0 = time.perf_counter()
+            # Kayan pencere: sinyaller `graf_gecmis_gun` gerisine bakmaz, o hâlde daha eski kenarlar bellekte
+            # durmasın. 7 günde bir kırpılır (her gün kırpmak dizileri gereksiz yere yeniden kurar). Pay olarak
+            # bir hafta bırakılır ki kırpma sinyalleri hiçbir koşulda etkilemesin.
+            if day.dayofyear % 7 == 0:
+                atilan = self.tgraph.kirp(day - (self.cfg.graf_gecmis_gun + 7) * DAY)
+                if atilan:
+                    LOG.debug("Temporal graf kırpıldı: %d kenar atıldı (gün %s)", atilan, day.date())
             tohum = {}
             for sid in signals:
                 ham = sum(h.weight * h.severity for h in hits_today[sid])
