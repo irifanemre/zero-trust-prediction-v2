@@ -33,17 +33,49 @@ VERİ TOPLAMA (OCSF-lite) ─▶ KİMLİK EŞLEŞTİRME ─▶ VERİ KALİTESİ 
 | Skorlama | `ztp/scoring.py` | Çarpanlar (×2.5 farklı taktik), yüzdelik, alarm bütçesi + kritik istisna, açık vaka |
 | Raporlama | `ztp/reporting/` | Deterministik şablon her zaman; LLM (Ollama / Anthropic) yalnızca kanıta bağlı özet; injection'a kapalı istem, bütünlük doğrulamalı ATT&CK bilgi tabanı (RAG), sıkı çıktı doğrulaması |
 | Öğrenen tahmin + kalibrasyon | `ztp/prediction_model.py` | Sezgisel başlangıç modeli, JSON'da saklanan lojistik model, Brier/AUC/ECE güvenilirlik raporu; model kural skorunu ezmez, ekler |
-| Geri besleme / ölçüm | `ztp/feedback.py`, `ztp/metrics.py`, `ztp/ablation.py` | Etiket deposu, FP sebebi zorunlu, kapsama/erkenlik/precision@k, kural sağlığı, sistem sağlığı, ablasyon |
+| Geri besleme / ölçüm | `ztp/feedback.py`, `ztp/metrics.py`, `ztp/ablation.py` | Etiket deposu, FP sebebi zorunlu, kapsama/erkenlik/precision@k **ve Recall@K**, kural sağlığı, sistem sağlığı, ablasyon |
 | Kalıcı durum / entegrasyon | `ztp/state.py`, `ztp/integrations.py`, `ztp/data/files.py` | SQLite durum deposu (günlük servis, idempotent), imzalı webhook + JSONL sink, dosya girişi |
 | Orkestrasyon | `ztp/pipeline.py`, `ztp/cli.py` | Toplu ve artımlı koşu (eşdeğerlik testli); CLI |
+
+### v4 katmanı — ilişkisel, zamansal ve belirsizlik bileşenleri
+
+Araştırma literatüründen (temporal heterogeneous GNN, conformal prediction, ADWIN, çok ajanlı LLM) türetilen
+bileşenler ayrı modüller olarak eklendi. **Hepsi varsayılanda kapalıdır** ve açılmaları ablasyon ölçümüne bağlıdır;
+gerekçesi [aşağıda](#neden-hepsi-varsay%C4%B1landa-kapal%C4%B1).
+
+| Bileşen | Modül | Ne sorar / ne yapar | Bayrak |
+|---|---|---|---|
+| Temporal heterogeneous graph | `ztp/gnn/temporal_graph.py` | Kenarları **akış** olarak tutar: her etkileşim kendi zaman damgasıyla. "Bu ilişki yeni mi", "aralıkta kimler dokundu" sorulabilir | `graf_enabled` |
+| Graf risk sinyalleri | `ztp/gnn/tgn_model.py` | `graf_yenilik`, `graf_seyreklik`, `graf_tur_kaymasi`, `graf_komsu_riski` | `graf_agirligi` |
+| RiskScore-Guided yayılım | `ztp/gnn/tgn_model.py::risk_yayilimi` | Davranışsal skoru **kaldırmaz**, grafa tohum verir; risk paylaşılan varlıklar üzerinden yayılır. Mesajlar kaynağıyla taşınır, kullanıcı kendi riskini geri almaz | `graf_yayilim_adim` |
+| Erken uyarı / yörünge | `ztp/gnn/tgn_model.py` | `erken_uyari_suresi`: eşik gerçek olaydan kaç gün önce aşıldı. Eşiği aşıp düşen tek günlük sıçrama sayılmaz | — |
+| Belirsizlik (Venn-Abers) | `ztp/gnn/conformal_eval.py` | Tekil olasılık yerine kalibre aralık (%81 → [%74, %88]); aralık genişliği "bu bölgede ne kadar veri var"ın ölçüsü. 20 noktanın altında `[0,1]` ve "gözlem süresi uzatılmalı" uyarısı | `belirsizlik_enabled` |
+| Bayesian risk kapısı | `ztp/gnn/bayesian_gate.py` | Kuyruk **eksik kapanabilir**: zayıf kanıtlı vaka bütçede yer olsa da alınmaz. Kritik vakalar muaf; etiketi olmayan örüntü susturulmaz | `bayes_kapi_esigi` |
+| ADWIN kavram kayması | `ztp/drift.py` | Yıllık izin dönüşü / departman geçişinde kişisel baz çizgisini keser; Hoeffding sınırı, üstel histogram (10.000 gözlem < 100 kova) | `adwin_enabled` |
+| Kanıt doğrulayıcı | `ztp/llm_guards/claim_verifier.py` | LLM özetini **cümle cümle** denetler; vakada olmayan olay/kural kimliği ya da kanıtta geçmeyen sayı içeren cümleyi siler ve gerekçesini döndürür | `kanit_dogrulama` |
+| Çok ajanlı SOC | `ztp/reporting/multi_agent.py` | Investigator (olgular) ve Verifier (imzalı ATT&CK tabanı) **deterministiktir, LLM kullanmaz**; model yalnızca anlatır. Teyit edilemeyen teknik rapora giremez | `cok_ajanli_rapor` |
+| Recall@K | `ztp/metrics.py` | SOC kapasitesi ölçütü: "günde K vaka bakabiliyorsam insider'ların kaçını görürüm". precision@k'nin aksine taban oranından bağımsız | her koşuda açık |
+
+#### Neden hepsi varsayılanda kapalı
+
+Bu projede iki ekleme ölçüldü ve **reddedildi**:
+
+- **Öğrenen modelin skora katılması** (`prediction_weight`): "tümü" üzerinde iyi görünüyordu; doğrulama parçasında
+  precision@1 **0,188 → 0,145** düştü. Kazanç eğitim bulaşmasıydı.
+- **Tuzak (decoy) dosyalarının honeytoken'a bağlanması**: r6.2'de 31.095 tuzak dosyası var, ama kullanıcıların
+  **%80'i** bunlara rutin olarak dokunuyor. Bağlansaydı günde ~890 kritik vaka üretirdi.
+
+İkisi de "mantıklı görünen ama ölçünce zarar veren" eklemelerdi. Bu yüzden her yeni bileşen önce gölge modda
+ölçülür (14.5); fayda ölçülmeden karar yoluna girmez. Kapalı davranışın birebir korunduğu
+`scripts/surum_karsilastir.py` ile r4.2'de doğrulanır ve test takımı bunu ayrıca korur.
 
 Bağımlılık yönü tek taraflıdır: `schema/stats → features/identity/quality/graph → profile/prediction/detection → scoring → reporting/metrics → pipeline → cli`. Tespit motoru raporlama katmanına bağımlı değildir (açıklama üretici enjekte edilir).
 
 ## Kurulum
 
 ```bash
-git clone https://github.com/irifanemre/zero-trust-prediction.git
-cd zero-trust-prediction
+git clone https://github.com/irifanemre/zero-trust-prediction-v2.git
+cd zero-trust-prediction-v2
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"          # LLM raporlama için: pip install -e ".[dev,llm]"
 ```
@@ -187,6 +219,35 @@ r4.2 kuralların ayarlandığı veridir, yani **üst sınır**. r5.2 ve r6.2 kö
 ATT&CK bilgi grafı örnek alt kümedir; saklama süresi / silme hakkı uygulanmadı; öğrenen model yalnızca cevap anahtarı
 (test) veya analist etiketiyle eğitilir ve varsayılan olarak skora eklenmez (`prediction_weight: 0`); CERT'te İK sinyalleri
 olmadığından PRED-0011/13/14 gerçek veride sınanamadı. Yol haritası için mimari doküman §23 ve Ek D.1.
+
+**v4 bileşenlerinin bilinen sınırları:**
+
+- **Graf sinyalleri çarpan olarak girer** (`ham = taban × çarpan`). Hiçbir kuralı tetiklememiş bir kullanıcının
+  tabanı sıfırdır ve çarpan onu yukarı taşıyamaz. r4.2'de kaçırılan 13 insider'ın **7'si** bu durumda; graf ancak
+  sinyalleri **okuyan bir kural** yazıldığında onlara ulaşabilir — bu da yeni bir dondurma sürümü ve yeni bir
+  veri seti gerektirir.
+- **Bayesian kapı analist etiketi ister.** Etiketsiz bir CERT koşusunda tasarım gereği hiçbir şey elemez
+  ("etiketi olmayan örüntü susturulmaz"). Cevap anahtarından öğrenmesi eğitim bulaşması olurdu.
+- **TGN eğitilmiş değil.** `tgn_model.py` deterministik bir graf temel çizgisidir: ağırlık dosyası yoktur, aynı
+  girdi aynı çıktıyı verir. Eğitilmiş bir TGN bunun yerine değil **üstüne** gelir ve ablasyonda buna karşı ölçülür.
+- **Akış ve graf motoru altyapısı yok.** Kafka/Flink akış işleme ve Memgraph/Neo4j graf motoru geçişi
+  tasarlanmış ama uygulanmamıştır; mevcut uygulama parça parça toplu işleme ve NetworkX üzerinedir.
+
+## Ölçüm sonuçları
+
+| Veri | Rolü | Kullanıcı | İnsider | Yakalama | precision@1 | Yanlış alarm |
+|---|---|---|---|---|---|---|
+| CERT r4.2 | kuralların ayarlandığı veri (**üst sınır**) | 1000 | 34 | 21/34 | 0,42 | %24–29 |
+| CERT r5.2 | 1. kör koşu | ~1000 | 99 | — | 0,20 | %18–26 |
+| CERT r6.2 | 2. kör koşu | 2801 | 5 | 3/4 | 0,014 | %19,2 |
+
+precision@1'in r6.2'de düşmesi model kötüleşmesi değil **taban oranı etkisidir**: insider yoğunluğu r5.2'ye göre
+55 kat düşük (binde 0,36). Yanlış alarm oranının üç veri setinde de %18–29 bandında kalması, kuralların tek bir
+veri setine ezberlenmediğini gösterir. Ayrıntı ve sapma kayıtları: [`docs/kor-kosu-r62-sonuclar.md`](docs/kor-kosu-r62-sonuclar.md).
+
+**Recall@K (r4.2, 34 insider):** analist kapasitesi 5'ten sonra doygunluğa ulaşıyor — kapasiteyi 5'ten 30'a
+çıkarmak tek bir insider daha kazandırmıyor (`recall@5_kullanici = recall@30_kullanici = 0,618`). Kaçırılan
+insider'lar bir kapasite sorunu değil, bir sıralama/tespit sorunudur.
 
 ## Lisans
 
