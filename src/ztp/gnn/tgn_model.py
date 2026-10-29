@@ -203,7 +203,7 @@ class TemporalGraphBaseline:
             if akran_onbellek is not None and anahtar in akran_onbellek:
                 sayi = akran_onbellek[anahtar]
             else:
-                sayi = len(graf.hedefe_dokunan_kullanicilar(tur, hedef, gecmis_bas, gun_sonu))
+                sayi = graf.akran_sayisi(tur, hedef, gecmis_bas, gun_sonu, en_fazla=self.seyrek_esik)
                 if akran_onbellek is not None:
                     akran_onbellek[anahtar] = sayi
             if sayi < self.seyrek_esik:

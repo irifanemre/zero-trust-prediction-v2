@@ -109,3 +109,17 @@ def test_eksik_kolonlar_atlanir():
     ev = _olaylar([dict(time=_t(0), canonical="U1", device="PC-1")])  # resource/category/process yok
     g = TemporalHeteroGraph.olaylardan(ev)
     assert g.ozet()["tur_dagilimi"] == {"cihaz": 1}
+
+
+def test_akran_sayisi_erken_cikis(graf):
+    """Seyreklik sorusu 'eşikten az mı' biçiminde; tam sayım gerekmez. Erken çıkış eşikle sınırlı değer döndürür."""
+    assert graf.akran_sayisi("kaynak", "rapor.docx") == 2  # sınırsız: tam sayı
+    assert graf.akran_sayisi("kaynak", "rapor.docx", en_fazla=1) == 1  # eşiğe ulaşınca durur
+    assert graf.akran_sayisi("kaynak", "maas.xlsx", en_fazla=3) == 1  # seyrek: eşiğin altında kalır
+    assert graf.akran_sayisi("kaynak", "yok", en_fazla=3) == 0
+    assert graf.akran_sayisi("cihaz", "PC-1", _t(0), _t(2), en_fazla=5) == 1  # zaman penceresine saygılı
+
+
+def test_akran_sayisi_hedefe_dokunanlarla_tutarli(graf):
+    for tur, hedef in (("kaynak", "rapor.docx"), ("cihaz", "PC-1"), ("kaynak", "maas.xlsx")):
+        assert graf.akran_sayisi(tur, hedef) == len(graf.hedefe_dokunan_kullanicilar(tur, hedef))

@@ -118,14 +118,20 @@ class TemporalHeteroGraph:
         return g.sonlandir()
 
     # ------------------------------------------------------------------ sorgular
+    @staticmethod
+    def _sinirlar(n: int, zamanlar: "np.ndarray", t0, t1) -> Tuple[int, int]:
+        """Zaman penceresinin [bas, son) indeksleri — dilim KOPYALAMADAN."""
+        bas = int(np.searchsorted(zamanlar, pd.Timestamp(t0).value, "left")) if t0 is not None else 0
+        son = int(np.searchsorted(zamanlar, pd.Timestamp(t1).value, "right")) if t1 is not None else n
+        return bas, son
+
     def _dilim(self, liste: Sequence, zamanlar: "np.ndarray", t0, t1) -> Sequence:
         """Önceden kurulmuş int64 zaman dizisinde ikili arama — sorgu başına O(log n)."""
         if not self._sirali:
             raise RuntimeError("sonlandir() çağrılmadan sorgu yapılamaz")
         if not len(liste):
             return []
-        bas = int(np.searchsorted(zamanlar, pd.Timestamp(t0).value, "left")) if t0 is not None else 0
-        son = int(np.searchsorted(zamanlar, pd.Timestamp(t1).value, "right")) if t1 is not None else len(liste)
+        bas, son = self._sinirlar(len(liste), zamanlar, t0, t1)
         return liste[bas:son]
 
     def kenarlar(self, kullanici: str, t0: Optional[pd.Timestamp] = None, t1: Optional[pd.Timestamp] = None) -> List[Kenar]:
@@ -165,6 +171,39 @@ class TemporalHeteroGraph:
         if not liste:
             return set()
         return {sid for _, sid in self._dilim(liste, self._hedef_zaman[anahtar], t0, t1)}
+
+    def akran_sayisi(
+        self,
+        hedef_tur: str,
+        hedef: str,
+        t0: Optional[pd.Timestamp] = None,
+        t1: Optional[pd.Timestamp] = None,
+        en_fazla: Optional[int] = None,
+    ) -> int:
+        """Hedefe dokunan farklı kullanıcı sayısı; `en_fazla` verilirse o sayıya ulaşınca **durur**.
+
+        Seyreklik sorusu "3'ten az kullanıcı mı dokundu" biçimindedir; tam sayıya gerek yoktur. Popüler bir
+        hedefte (ör. tek bir site kategorisinde milyonlarca kayıt) ilk birkaç kayıt cevabı verir. Erken çıkış
+        olmadan her sorgu listenin tamamını tarıyordu ve gerçek veride gün başına dakikalara çıkıyordu.
+        Döndürülen değer `en_fazla` ile sınırlıdır: eşik karşılaştırması için yeterli, tam sayım için değil.
+        """
+        if not self._sirali:
+            raise RuntimeError("sonlandir() çağrılmadan sorgu yapılamaz")
+        anahtar = (hedef_tur, hedef)
+        liste = self._hedef_kullanicilari.get(anahtar, [])
+        if not liste:
+            return 0
+        # Dilim KOPYALANMAZ: popüler bir hedefte milyonlarca kayıt var ve kopyalamanın kendisi erken çıkışı
+        # anlamsız kılardı. İndeks aralığında gezilir, eşiğe ulaşınca durulur.
+        bas, son = self._sinirlar(len(liste), self._hedef_zaman[anahtar], t0, t1)
+        if en_fazla is None:
+            return len({liste[i][1] for i in range(bas, son)})
+        gorulen: Set[str] = set()
+        for i in range(bas, son):
+            gorulen.add(liste[i][1])
+            if len(gorulen) >= en_fazla:
+                break
+        return len(gorulen)
 
     def yeni_komsular(
         self, kullanici: str, t0: pd.Timestamp, t1: pd.Timestamp, gecmis_baslangic: Optional[pd.Timestamp] = None
