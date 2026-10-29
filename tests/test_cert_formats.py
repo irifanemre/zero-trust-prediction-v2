@@ -85,8 +85,30 @@ def test_malformed_answer_date_is_logged_not_fatal(tmp_path, caplog):
     )
     with caplog.at_level(logging.WARNING, logger="ztp.data.cert"):
         data = _load(d, str(ans))
+    # 12/21 ve 01/21, bitiş 01/07'yi aşar → onarım kuralı iki ayı da reddeder, satır düşer ama uyarı basılır
     assert [g["sid"] for g in data.ground_truth] == ["AAA0001"]
     assert "BBB0002" in caplog.text and "değerlendirilemedi" in caplog.text
+
+
+def test_missing_month_in_answer_date_is_repaired(tmp_path, caplog):
+    """Ön kayıt §2.2: ayı eksik başlangıç tarihi, ay BİTİŞTEN alınarak onarılır (r6.2/CDE1846 satırı).
+
+    Gün, saat ve yıl dosyadan gelir; sonuç bitişi aşamaz ve 60 günden eski olamaz. Onarım uyarıyla kaydedilir.
+    Desen pandas'tan ÖNCE denetlenir: "/05/2010" pandas'ta sessizce 1 Mayıs olur, bu satır 5 Ocak'tır.
+    """
+    d = _release(tmp_path, "r5.2", r5=True)
+    ans = tmp_path / "answers"
+    ans.mkdir()
+    _write(
+        ans,
+        "insiders.csv",
+        "dataset,scenario,details,user,start,end\n5.2,4,y.csv,BBB0002,/05/2010 09:00:00,01/06/2010 17:55:00\n",
+    )
+    with caplog.at_level(logging.WARNING, logger="ztp.data.cert"):
+        data = _load(d, str(ans))
+    assert [g["sid"] for g in data.ground_truth] == ["BBB0002"]
+    assert data.ground_truth[0]["baslangic_tarihi"] == "2010-01-05"
+    assert "onarıldı" in caplog.text and "değerlendirilemedi" not in caplog.text
 
 
 def test_only_users_restricts_directory_answers_and_events(tmp_path):

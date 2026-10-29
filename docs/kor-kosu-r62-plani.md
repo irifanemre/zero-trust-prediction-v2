@@ -37,7 +37,7 @@ r6.2 biçimi r5.2 ile aynıdır (r5+ ailesi). r5.2 planında ilan edilen eşleme
 `file.csv` yalnız `to_removable_media=True`; `email.csv` yalnız `activity=Send`, `bytes_out = size`;
 `http.csv` yalnız `url` (content okunmaz); `insiders.csv`'de ayrıştırılamayan tarih sessizce düşmez.
 
-**Yeni ayrıştırıcı değişikliği yapılmayacaktır.**
+Bunun dışında **yeni ayrıştırıcı değişikliği yapılmayacaktır**; tek istisna §2.2'deki tarih onarımıdır.
 
 ### 2.1 İncelenen ve REDDEDİLEN seçenek: decoy_file.csv
 
@@ -56,6 +56,36 @@ katmanının (HONEY-0018/19/20) nihayet gerçek veride sınanabileceği yönünd
 "meşru kullanımı yoktur" varsayımıdır. r6.2'de decoy dosyalara kullanıcıların %80'i rutin olarak erişiyor; bunlar
 simülasyonda sıradan dosyalardır. HONEY-0019'a bağlansaydı (kural `kritik: true`, bütçeden bağımsız) günde
 ~890 kritik vaka üretilirdi. Aldatma katmanı bu veride de **sınanmamış** kalacaktır ve kural matrisinde öyle raporlanacaktır.
+
+### 2.2 TADİL (koşudan önce): cevap anahtarındaki eksik ay onarımı
+
+**Tadil tarihi: 29 Ekim 2026. Hâlâ hiçbir tespit/skor/kuyruk çıktısı üretilmedi** — bu tadil sonuçlar görülmeden yapıldı.
+
+r6.2'nin resmi cevap anahtarında (`answers/insiders.csv`) **tek bir bozuk tarih** var:
+
+| Kullanıcı | Senaryo | `start` (dosyada) | `end` (dosyada) |
+|---|---|---|---|
+| CDE1846 | S4 | `/21/2011 11:43:39` — **ay eksik** | `04/25/2011 17:55:00` |
+
+İlk plandaki davranış ("ayrıştırılamayan tarih sessizce düşmez") bu satırı uyarı basıp **atıyordu**. Sonucu: 5 insider'ın
+4'ü ölçülebiliyor ve **test parçasının tek insider'ı** (§3 bölmesinde test = 600 kullanıcı / 1 insider = S4) kayboluyor,
+yani parça bazlı değerlendirmenin bir parçası tamamen boşalıyordu.
+
+**Tadil:** yalnız "ay alanı boş" biçimindeki (`/GG/YYYY ...`) başlangıç tarihleri, **ay bitiş tarihinden alınarak**
+onarılır. Kural (`src/ztp/data/cert.py::_repair_missing_month`), deterministik ve tek seçenekli:
+
+1. Gün, saat ve yıl **dosyadaki değerlerdir**; tahmin edilmez.
+2. Ay önce `end.month` denenir. Sonuç geçerli bir tarih olmalı, `end`'i **geçmemeli** ve `end`'den en çok **60 gün** önce olmalı.
+3. Tutmazsa bir önceki ay aynı ölçütlerle denenir (ayı aşan gün durumu için).
+4. İkisi de tutmazsa **onarım yapılmaz**; satır eskisi gibi "değerlendirilemedi" sayılır.
+
+CDE1846 için sonuç: **2011-04-21 11:43:39 → 2011-04-25 17:55:00**. Ay seçeneği tek: 04 dışındaki her ay ya `end`'i geçer
+ya 60 günü aşar. Onarım günlüğe `WARNING` olarak basılır ve sonuç raporunda bu başlıkla birlikte anılır.
+
+**Bu tadilin ölçüme etkisi:** değerlendirilebilir insider 4 → **5**; test parçası 0 → 1 insider. §5'teki önceden yazılmış
+beklentiler (2–4 insider yakalanır) **değişmedi** — tadil neyin ölçüldüğünü değiştirmez, S4'ün ölçülebilmesini sağlar.
+Onarım kuralı hiçbir tespit kuralına, eşiğe ya da skora dokunmaz; `cert.py` dondurma manifestinde **değildir**
+(yükleyici, kural değil), dolayısıyla v3 dondurması bozulmaz.
 
 ## 3. Veri, pencere ve ayarlar
 

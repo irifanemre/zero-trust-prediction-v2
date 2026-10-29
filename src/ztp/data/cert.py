@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import List, Optional, Sequence
@@ -182,6 +183,30 @@ def _compact(events: pd.DataFrame) -> pd.DataFrame:
     return events
 
 
+_MISSING_MONTH = re.compile(r"^\s*/(\d{1,2})/(\d{4})(.*)$")
+
+
+def _repair_missing_month(raw: str, end: pd.Timestamp) -> pd.Timestamp:
+    """Resmi cevap anahtarındaki tek bozuk tarihi onarır: r6.2 / CDE1846 başlangıcı "/21/2011 11:43:39" (ay eksik).
+
+    Kural (koşudan ÖNCE, sonuç görülmeden sabitlendi — ön kayıt §2.2): ay yalnızca bitiş tarihinden alınır ve
+    sonuç bitişten sonra olamaz; aynı ay tutmazsa bir önceki ay denenir, o da tutmazsa onarım YAPILMAZ ve satır
+    "değerlendirilemedi" sayılır. Tahmin yok: gün, saat ve yıl dosyadaki değerlerdir.
+    """
+    m = _MISSING_MONTH.match(raw or "")
+    if not m or pd.isna(end):
+        return pd.NaT
+    gun, yil, kalan = int(m.group(1)), int(m.group(2)), m.group(3).strip()
+    for ay in (end.month, end.month - 1 if end.month > 1 else 12):
+        try:
+            aday = pd.to_datetime(f"{ay:02d}/{gun:02d}/{yil} {kalan}".strip(), format="mixed")
+        except (ValueError, TypeError):
+            continue
+        if aday <= end and (end - aday).days <= 60:
+            return aday
+    return pd.NaT
+
+
 def load_cert_dataset(
     cert_dir: str,
     start: pd.Timestamp,
@@ -260,9 +285,22 @@ def load_cert_dataset(
         ins = pd.read_csv(insiders_path)
         ins = ins[ins["dataset"].astype(str) == release]
         for r in ins.itertuples(index=False):
-            s0 = pd.to_datetime(r.start, format="mixed", errors="coerce")
             s1 = pd.to_datetime(r.end, format="mixed", errors="coerce")
-            if pd.isna(s0) or pd.isna(s1):  # resmi cevap anahtarında bozuk tarih var (r6.2 CDE1846: "/21/2011"); sessizce düşmez
+            # Eksik ay deseni pandas'tan ÖNCE denetlenir: "/05/2010" sessizce 1 Mayıs olarak okunurdu (gün ay sanılır).
+            eksik_ay = bool(_MISSING_MONTH.match(str(r.start)))
+            s0 = pd.NaT if eksik_ay else pd.to_datetime(r.start, format="mixed", errors="coerce")
+            if pd.isna(s0) and not pd.isna(s1):
+                s0 = _repair_missing_month(str(r.start), s1)
+                if not pd.isna(s0):
+                    LOG.warning(
+                        "Cevap anahtarında ayı eksik tarih onarıldı: %s S%s %r → %s (bitiş %s)",
+                        r.user,
+                        r.scenario,
+                        r.start,
+                        s0.date(),
+                        s1.date(),
+                    )
+            if pd.isna(s0) or pd.isna(s1):  # onarılamayan bozuk tarih sessizce düşmez
                 LOG.warning(
                     "Cevap anahtarı satırı değerlendirilemedi (tarih okunamadı): %s S%s %r–%r", r.user, r.scenario, r.start, r.end
                 )
