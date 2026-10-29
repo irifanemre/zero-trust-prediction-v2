@@ -140,6 +140,7 @@ class MetricsCollector:
                     t += hit
                     f += not hit
             at_k[f"precision@{k}"] = round(t / (t + f), 3) if (t + f) else None
+        at_k.update(self._recall_at_k(windows))
         users_q = set(self.alerts_by_sid)
         users_tp = {
             sid for sid in users_q if any(a <= d <= b for d, _ in self.alerts_by_sid[sid] for a, b in windows.get(sid, []))
@@ -158,6 +159,41 @@ class MetricsCollector:
             insider_sayisi=len(windows),
             gunluk={k: dict(dogru=v[0], yanlis=v[1]) for k, v in sorted(by_day.items())},
         )
+
+    def _recall_at_k(self, windows: dict) -> dict:
+        """Recall@K — SOC kapasitesi ölçütü: "analist günde K vaka bakabiliyorsa insider'ların kaçı o K'ya giriyor?"
+
+        precision@k "ilk K'nın kaçı doğru" der ve taban oranı düştükçe kaçınılmaz olarak düşer (r6.2: 0,014).
+        Recall@K ise soruyu analistin tarafından sorar ve taban oranından bağımsızdır. İki ayrı pay kullanılır:
+
+        - `recall@K`            : insider-gün tabanlı. Payda, insider'ın tespit penceresinde geçirdiği ve o gün
+                                  kuyruğun kurulduğu günlerin sayısı. "Fırsatların kaçı değerlendirildi."
+        - `recall@K_kullanici`  : kullanıcı bazlı. Payda, en az bir gün penceresi olan insider sayısı. Bir insider
+                                  pencere boyunca **bir kez** ilk K'ya girdiyse yakalanmış sayılır — SOC gerçeği budur.
+
+        K, kuyruğun o günkü uzunluğunu aşarsa kuyruk neyse o kullanılır; yapay olarak şişirilmez.
+        """
+        if not windows or not self.queue_by_day:
+            return {}
+        gunler = sorted(self.queue_by_day)
+        firsat = {  # insider -> o insider'ın penceresine düşen ve kuyruk kurulan günler
+            sid: [d for d in gunler if any(a <= d <= b for a, b in araliklar)] for sid, araliklar in windows.items()
+        }
+        toplam_firsat = sum(len(v) for v in firsat.values())
+        olculebilir = [sid for sid, v in firsat.items() if v]
+        out: dict = {}
+        for k in (1, 3, 5, 10, 30):
+            yakalanan_gun = 0
+            yakalanan_kullanici = set()
+            for sid, gun_listesi in firsat.items():
+                for d in gun_listesi:
+                    if sid in self.queue_by_day[d][:k]:
+                        yakalanan_gun += 1
+                        yakalanan_kullanici.add(sid)
+            out[f"recall@{k}"] = round(yakalanan_gun / toplam_firsat, 3) if toplam_firsat else None
+            out[f"recall@{k}_kullanici"] = round(len(yakalanan_kullanici) / len(olculebilir), 3) if olculebilir else None
+        out["recall_paydasi"] = dict(insider_gun=toplam_firsat, insider_kullanici=len(olculebilir))
+        return out
 
     def coverage(self) -> List[dict]:
         """19.6 Saldırı simülasyonu kaydı: teknik, kaynak, beklenen tespit, gerçek sonuç, erkenlik, sonuç."""
