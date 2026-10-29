@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CERT r5.2 kör koşusu (ön kayıt planı: `git show kor-kosu-r5.2-hazir:docs/kor-kosu-plani.md`) — tek koşu, kurallar `kurallar-donduruldu-v1`.
+"""CERT r5.2 kör koşusu (ön kayıt planı: `docs/kor-kosu-r52-plani.md`) — tek koşu, kurallar `kurallar-donduruldu-v1`.
 
 Dönem D1'den geriye 90 günlük pencerelere bölünür; her pencere `cert_eval.py` ile aynı ayarlarla (--days 90 --warmup 21,
 bütçe 10) kendi 111 günlük tarihçesiyle koşulur ve bellek pencereden sonra boşaltılır. Her senaryo, bitiş tarihini içeren
@@ -42,7 +42,7 @@ from ztp.schema import DAY  # noqa: E402
 LOG = logging.getLogger("kor_kosu_r52")
 REPO = Path(__file__).resolve().parents[1]
 FREEZE = REPO / "configs" / "freeze" / "kurallar-donduruldu-v1.json"
-PLAN = REPO / "docs" / "kor-kosu-plani.md"
+PLAN = REPO / "docs" / "kor-kosu-r52-plani.md"
 MODEL = REPO / "configs" / "models" / "kor-r52-birincil-lr.json"
 SPLIT = REPO / "configs" / "splits" / "cert-r5.2-kullanici-bolmesi.json"
 SAMPLE = REPO / "configs" / "splits" / "cert-r5.2-orneklem.json"  # plan §3.2 (f, katmanlı, tohum 42)

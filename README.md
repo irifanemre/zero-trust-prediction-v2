@@ -151,7 +151,8 @@ Ek D.2; prediction katmanının kalibrasyon ölçümü, öğrenen model ve ablas
 
 ## Dokümantasyon
 
-Üç belge var; başka md yok (runbook'lar `src/ztp/detection/runbooks/` altında, kodun parçasıdır).
+Beş belge var; dizin ve okuma sırası için [docs/README.md](docs/README.md). Başka md yok (runbook'lar
+`src/ztp/detection/runbooks/` altında, kodun parçasıdır).
 
 - [docs/mimari-dokuman.md](docs/mimari-dokuman.md) — mimari dokümanın md sürümü (**1.2**): Final 1.0 metni + uygulama ve CERT
   doğrulamasıyla düzeltilen bölümler (`1.1 düzeltmesi` blokları), mimari ↔ uygulama denetiminden çıkan düzeltmeler
@@ -163,6 +164,23 @@ Ek D.2; prediction katmanının kalibrasyon ölçümü, öğrenen model ve ablas
   değişiklik, önce/sonra ölçümü) ve CERT r4.2 doğrulaması (veri eşlemesi, sonuçlar, sınırlar).
 - [docs/cert-r42-r52-karsilastirma.md](docs/cert-r42-r52-karsilastirma.md) — CERT r4.2 ve r5.2'nin 70/15/15 (eğitim / doğrulama / test)
   karşılaştırması: kural sistemi, öğrenen model, kural sağlığı, kör koşu ve sapma kaydı.
+- **Ön kayıt belgeleri** — [docs/kor-kosu-r52-plani.md](docs/kor-kosu-r52-plani.md) ve
+  [docs/kor-kosu-r62-plani.md](docs/kor-kosu-r62-plani.md). Her ikisi de ilgili veri seti **görülmeden** yazıldı:
+  pencereler, bütçe, metrikler ve önceden yazılmış beklentiler. Koşu bir kezdir; sonucu görüp kural değiştirmek yasaktır.
+  Kronoloji git'ten doğrulanabilir (bkz. docs/README.md).
+
+## Kör koşu yöntemi
+
+Bir tespit sistemini kendi ayarlandığı veriyle sınamak hiçbir şey kanıtlamaz. Bu depodaki rakamların dayanağı şu üç kural:
+
+1. **Dondurma.** Kurallar, eşikler ve ağırlıklar `configs/freeze/` altında bir manifeste yazılır; manifest 34 dosyanın
+   karmasını tutar. Koşudan hemen önce doğrulanır:
+   `python -m ztp.freeze --check configs/freeze/kurallar-donduruldu-v3.json` → `donmuş durumla aynı`.
+2. **Ön kayıt.** Veri görülmeden plan yazılır — beklenen sonuç dahil. Tutmayan beklenti sonucun kendisidir.
+3. **Tek koşu.** Sonucu görüp kural/eşik/bütçe değiştirip yeniden koşmak yasaktır; böyle bir değişiklik yeni bir
+   dondurma sürümü ve yeni bir veri seti gerektirir. Plandan sapmalar silinmez, ayrı başlık olarak yazılır.
+
+r4.2 kuralların ayarlandığı veridir, yani **üst sınır**. r5.2 ve r6.2 kör veri setleridir.
 
 ## Bilinen sınırlar
 

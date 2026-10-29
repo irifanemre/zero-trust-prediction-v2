@@ -74,7 +74,7 @@ REL-0015 ve REL-0016 için kritik varlık listesi ve kaynak erişim kayıtları 
 ## Kayıt ve sapma
 
 - **r5.2 kör koşu.** r5.2 önce ön kayıtlı tek bir kör koşuyla ölçüldü (27 Ekim 2026, HEAD `7df7bce`, etiket
-  `kor-kosu-r5.2-hazir`). Plan: `git show kor-kosu-r5.2-hazir:docs/kor-kosu-plani.md`. Kural ve metrik değerleri o
+  commit `998469d`). Plan: `docs/kor-kosu-r52-plani.md`, ön kayıt commit'i `7792965` (8 Ekim 2026). Kural ve metrik değerleri o
   koşudan sonra değiştirilmedi; bu belgedeki r5.2 sayıları o koşunun çıktılarıdır.
 - **Örneklem.** 2000 kullanıcının tamamı makinenin belleğine sığmadı (tahmini 21,8 GB). Plan gereği tek oranlı katmanlı
   örneklem alındı: f = 0,55, tohum 42, 1102 kullanıcı, 56 insider. Insider oranı korundu (%5,08; nüfusta %4,95).
