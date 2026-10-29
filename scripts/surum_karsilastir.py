@@ -44,19 +44,44 @@ LOG = logging.getLogger("surum")
 KARSILASTIRILAN = ("olay", "kuyruk", "kural_tetiklenme", "vaka", "kapsama")
 
 
-def kosu(cert_dir: str, answers: str, out: Path, days: int, warmup: int, budget: int, tenant: str) -> dict:
+# "Hepsi açık" yapılandırması. Bunlar ÖLÇÜM için açılır; hangisinin faydalı olduğu ablasyonla belirlenir.
+HEPSI_ACIK = dict(
+    graf_enabled=True,
+    graf_agirligi=0.5,
+    adwin_enabled=True,
+    bayes_kapi_esigi=0.3,
+    belirsizlik_enabled=True,
+    kanit_dogrulama="dengeli",
+    cok_ajanli_rapor=True,
+)
+
+
+def kosu(cert_dir: str, answers: str, out: Path, days: int, warmup: int, budget: int, tenant: str, ac: bool = False) -> dict:
     end = pd.Timestamp("2010-11-30")
     start = end - (days - 1) * DAY
     start_hist = end - (90 + warmup + days) * DAY
     t0 = time.perf_counter()
     data = load_cert_dataset(cert_dir, start_hist, end, answers_dir=answers)
-    cfg = TenantConfig(tenant_id=tenant, alarm_budget_per_day=budget, llm_backend="none", sinks=[])
+    ek = HEPSI_ACIK if ac else {}
+    cfg = TenantConfig(tenant_id=tenant, alarm_budget_per_day=budget, llm_backend="none", sinks=[], **ek)
     cfg.available_sources = tuple(sorted(set(data.events["source"].astype(str).unique()) | {"hr"}))
     pipe = ZeroTrustPredictionPipeline(cfg, data, load_catalog(), out)
     pipe.run(start, end, warmup)
     m = pipe.metrics
     hassasiyet = m.labeled_precision() or {}
+    # Hangi bileşen GERÇEKTEN çalıştı: açmak ile etki etmek ayrı şeylerdir, ikisi ayrı raporlanır.
+    graf_sinyalli = sum(1 for g in (pipe.tgraph.kullanicilar if pipe.tgraph else []) if g)
+    etkinlik = dict(
+        graf_kuruldu=pipe.tgraph is not None,
+        graf_kullanici=graf_sinyalli,
+        graf_kenar=pipe.tgraph.kenar_sayisi if pipe.tgraph else 0,
+        adwin_kesim=len(pipe.profile.adwin_cut),
+        adwin_izlenen=len(pipe.adwin),
+        bayes_elenen_gun=len(pipe.bayes_elenen),
+        bayes_elenen_vaka=sum(len(v) for v in pipe.bayes_elenen.values()),
+    )
     return dict(
+        etkinlik=etkinlik,
         olay=len(data.events),
         kuyruk={str(d.date()): list(v) for d, v in m.queue_by_day.items()},
         kural_tetiklenme=dict(m.rule_hits),
@@ -99,6 +124,7 @@ def main() -> int:
     ap.add_argument("--warmup", type=int, default=21)
     ap.add_argument("--budget", type=int, default=10)
     ap.add_argument("--tenant", default="esd-optimize", help="referans koşuyla AYNI olmalı")
+    ap.add_argument("--ac", action="store_true", help="tüm v4 bileşenlerini aç (ölçüm koşusu; fark BEKLENİR)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -108,12 +134,15 @@ def main() -> int:
     eski = ref_dosya["yeni"] if "yeni" in ref_dosya else ref_dosya  # esdegerlik.json ya da doğrudan koşu kaydı
     answers = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
 
-    yeni = kosu(args.cert_dir, answers, out, args.days, args.warmup, args.budget, args.tenant)
+    yeni = kosu(args.cert_dir, answers, out, args.days, args.warmup, args.budget, args.tenant, args.ac)
     farkli = karsilastir(eski, yeni)
 
     yeni_olcutler = {k: v for k, v in (yeni.get("hassasiyet") or {}).items() if k.startswith("recall@") or k == "recall_paydasi"}
     sonuc = dict(
+        mod="hepsi_acik" if args.ac else "varsayilan_kapali",
+        beklenen="fark olabilir" if args.ac else "fark OLMAMALI",
         ayni=not farkli,
+        etkinlik=yeni.get("etkinlik", {}),
         karsilastirilan=list(KARSILASTIRILAN),
         farkli_alanlar=sorted(farkli),
         fark_ayrintisi=farkli,
@@ -126,13 +155,13 @@ def main() -> int:
         yeni_olcutler=yeni_olcutler,
         precision_at_k={k: v for k, v in (yeni.get("hassasiyet") or {}).items() if k.startswith("precision@")},
     )
-    (out / "surum_karsilastirma.json").write_text(
+    (out / ("surum_karsilastirma_acik.json" if args.ac else "surum_karsilastirma.json")).write_text(
         json.dumps(dict(ozet=sonuc, yeni_kosu=yeni), ensure_ascii=False, indent=2), encoding="utf-8"
     )
     LOG.info("SONUÇ: %s", json.dumps({k: v for k, v in sonuc.items() if k != "fark_ayrintisi"}, ensure_ascii=False))
-    if farkli:
+    if farkli and not args.ac:
         LOG.error("DEĞİŞİKLİK VAR — kapalı olması gereken bir bileşen sızmış olabilir: %s", sorted(farkli))
-    return 0 if sonuc["ayni"] else 1
+    return 0 if (sonuc["ayni"] or args.ac) else 1
 
 
 if __name__ == "__main__":

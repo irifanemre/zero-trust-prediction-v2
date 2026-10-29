@@ -1,0 +1,523 @@
+{
+  "etiket": "kurallar-donduruldu-v4",
+  "surum": 1,
+  "dosyalar": {
+    "src/ztp/detection/rules/DQ-0010.yaml": "55b3d92d989c0692bad1168299bd01f727230e4fafb4587f9e7a0d1f57a4fe52",
+    "src/ztp/detection/rules/HONEY-0018.yaml": "36fb5fde71d0544038baf9b3a3b9f2699667041c5a1fd6a8008c9e3ef9d54048",
+    "src/ztp/detection/rules/HONEY-0019.yaml": "cdfea3b58435957819c22196ef7b2fd6d72b6a7aa4bd870a6caa4c7ae16ad648",
+    "src/ztp/detection/rules/HONEY-0020.yaml": "2069de0fb0791a85ccec1606e3b7f19b835cee5ff729078e04cd8f920a73242d",
+    "src/ztp/detection/rules/PRED-0011.yaml": "66bef1bb0ceecdfd62aad285d373892e7e814ba0586bf5ba4130fd5155de9fe4",
+    "src/ztp/detection/rules/PRED-0012.yaml": "051de6a4b8427eefd660ad25d09d01614313d49fda1fe55be3604517892c3b66",
+    "src/ztp/detection/rules/PRED-0013.yaml": "7a48153b2b42e620547f9083faf5cdc30401920a89bb7671003005785a757e6e",
+    "src/ztp/detection/rules/PRED-0014.yaml": "bcbf7d0cc8dd3ee78e542f0c81065065080ff946d63d729cf7201b9db2c54129",
+    "src/ztp/detection/rules/REL-0015.yaml": "a0d4e6d38aa0e2b27724773f597127d58cafa7b8326fd959bbf9e73a345cc7db",
+    "src/ztp/detection/rules/REL-0016.yaml": "9f17668277b579ed9eabdaf6174d64e1c5de42caa74d8774d34ee550149bf050",
+    "src/ztp/detection/rules/UEBA-0001.yaml": "d056e6fa7c42991560a3841bced94e1965dd551ec3ac579c700824fa3d4c6283",
+    "src/ztp/detection/rules/UEBA-0002.yaml": "efe1dc51476944820a608217fb5b5fc22da0336d74448920268686d931637304",
+    "src/ztp/detection/rules/UEBA-0003.yaml": "cce886dbbd26714fa87942ec81b8e4d63852e000dea09510839d9b16cc551fea",
+    "src/ztp/detection/rules/UEBA-0004.yaml": "19c96ad17453231a153d2f5d0a5f120d21d7906f0db862ae0231e0d5baf9d79d",
+    "src/ztp/detection/rules/UEBA-0005.yaml": "f4bdc75056a3870206c0439c82124721f9493d65fcce45e52b78f09a0aee7a10",
+    "src/ztp/detection/rules/UEBA-0006.yaml": "5d6c326ae586dcdae50368e509184fb72231a7beea1b112309d03c1e6aa88290",
+    "src/ztp/detection/rules/UEBA-0007.yaml": "814b89d9f4229e481ca19cc2d1af228b5010a94b9cebe89c1f2a177c16aa3176",
+    "src/ztp/detection/rules/UEBA-0008.yaml": "657c65d4e76c68f67df79ef80853c12b0f9dfb2855885aaf7be68e7a0b20cdb3",
+    "src/ztp/detection/rules/UEBA-0009.yaml": "b0c065d9f1d676d9725d7a3ae0a0c0aea8fce24c2ba303be8675f6f199e08520",
+    "src/ztp/detection/rules/UEBA-0017.yaml": "ec6d5543a9fdd339d850f83d3e36cdc7f4cbfc688a41ae55a97bacb36119ad0f",
+    "src/ztp/detection/rules/UEBA-0021.yaml": "5b295026189496bb14d924ba0f3312cf0079894599b8801366ca6b4993bae430",
+    "src/ztp/detection/rules/UEBA-IF01.yaml": "a77543f86876ff03154f72ece97be7fd6a9d25b268401ffdda3acb0f1e00c278",
+    "src/ztp/config.py": "0a8bfaa556af57a5d81aac20c444bbc8d3cf465501d0b302fe7bb37c0f72316e",
+    "src/ztp/detection/catalog.py": "8b298ed83facddfd341407c162113529a0fd81f6a4f314beaa02cc06107a1a3c",
+    "src/ztp/detection/engine.py": "08fbf27e9f0b6db923ae4c86098af418e2e5abc2a2ba5bc1166b3c208ca5a9b7",
+    "src/ztp/detection/expr.py": "00d551639fe98d8720f9387daafad5a47049b816e10bbad710615a81bdacf5b9",
+    "src/ztp/features.py": "8cbdc36445e4882a9b4355640f0efe905aa92feaaea219fe767024db9499a280",
+    "src/ztp/graph/analysis.py": "e8284d04d83da2e55638a628047ded913981ae79466399fde4a5ed5867d624fb",
+    "src/ztp/prediction.py": "d00c74f6ece7580ec919ffbd31d1c413abe36943089185ff4d48700c77ddac7c",
+    "src/ztp/prediction_model.py": "c6975b212135ba3a5e0bde61e20b08caf771a299ecf8db5e5835041062d055dc",
+    "src/ztp/profile.py": "f0a342fd33d04e7dddbab19062dccf9fe074de1e13e1d2d53dd960faee47aca1",
+    "src/ztp/quality.py": "ca8399b49957d8db65187f370bf884817523c456f6c30a5bc8d3abae2d5c616a",
+    "src/ztp/scoring.py": "1c07adc12da3b2d3772e0b21694dc7c1ef24d2870d7367993d7d4fa05391c912",
+    "src/ztp/stats.py": "2cf1791c088af0a5f3b814498c6e19ed48143963f5af6390a6e26b8aafd703b1"
+  },
+  "degerler": {
+    "kurallar": {
+      "DQ-0010": {
+        "durum": "yayinda",
+        "kosullar": [
+          "log_sessizligi == 1"
+        ],
+        "siddet": {
+          "sinyal": "log_sessizligi",
+          "esik": 0.5,
+          "olcek": 0.25
+        },
+        "agirlik": 5,
+        "bastirma": []
+      },
+      "HONEY-0018": {
+        "durum": "yayinda",
+        "kosullar": [
+          "tuzak_hesap_sayisi >= 1"
+        ],
+        "siddet": {
+          "sinyal": "tuzak_hesap_sayisi",
+          "esik": 0,
+          "olcek": 0.25
+        },
+        "agirlik": 20,
+        "bastirma": []
+      },
+      "HONEY-0019": {
+        "durum": "yayinda",
+        "kosullar": [
+          "tuzak_kaynak_sayisi >= 1"
+        ],
+        "siddet": {
+          "sinyal": "tuzak_kaynak_sayisi",
+          "esik": 0,
+          "olcek": 0.25
+        },
+        "agirlik": 20,
+        "bastirma": []
+      },
+      "HONEY-0020": {
+        "durum": "yayinda",
+        "kosullar": [
+          "tuzak_cihaz_sayisi >= 1"
+        ],
+        "siddet": {
+          "sinyal": "tuzak_cihaz_sayisi",
+          "esik": 0,
+          "olcek": 0.25
+        },
+        "agirlik": 20,
+        "bastirma": []
+      },
+      "PRED-0011": {
+        "durum": "yayinda",
+        "kosullar": [
+          "yetki_degisim_gun >= 0",
+          "yetki_sonrasi_kaynak_z > 3.0"
+        ],
+        "siddet": {
+          "sinyal": "yetki_sonrasi_kaynak_z",
+          "esik": 3.0,
+          "olcek": 2.0
+        },
+        "agirlik": 7,
+        "bastirma": []
+      },
+      "PRED-0012": {
+        "durum": "yayinda",
+        "kosullar": [
+          "risk_egim_7g > 0.5",
+          "risk_ewma_kisa > 3.0",
+          "risk_ewma_kisa > 1.5 * risk_ewma_uzun",
+          "risk_pozitif_gun_7g >= 3"
+        ],
+        "siddet": {
+          "sinyal": "risk_egim_7g",
+          "esik": 0.5,
+          "olcek": 0.5
+        },
+        "agirlik": 6,
+        "bastirma": []
+      },
+      "PRED-0013": {
+        "durum": "yayinda",
+        "kosullar": [
+          "sessizlik_gun >= 14",
+          "izin_kayitli == 0",
+          "donus_aktivite_z > 3.0"
+        ],
+        "siddet": {
+          "sinyal": "donus_aktivite_z",
+          "esik": 3.0,
+          "olcek": 2.0
+        },
+        "agirlik": 5,
+        "bastirma": []
+      },
+      "PRED-0014": {
+        "durum": "yayinda",
+        "kosullar": [
+          "ayrilik_bildirimi == 1",
+          "hacim_trend_14g > 1.0 or bulut_yeni_uygulama == 1 or veri_hacmi_z > 3.0 or usb_sayisi >= 1"
+        ],
+        "siddet": {
+          "sinyal": "veri_hacmi_z",
+          "esik": 1.0,
+          "olcek": 2.0
+        },
+        "agirlik": 8,
+        "bastirma": []
+      },
+      "REL-0015": {
+        "durum": "yayinda",
+        "kosullar": [
+          "paylasilan_cihaz_sayisi >= 1",
+          "kritik_varliga_yol_sayisi >= 1"
+        ],
+        "siddet": {
+          "sinyal": "kritik_varliga_yol_sayisi",
+          "esik": 0.5,
+          "olcek": 1.0
+        },
+        "agirlik": 7,
+        "bastirma": []
+      },
+      "REL-0016": {
+        "durum": "yayinda",
+        "kosullar": [
+          "ortak_kaynak_riskli_kume >= 1"
+        ],
+        "siddet": {
+          "sinyal": "ortak_kaynak_riskli_kume",
+          "esik": 0.5,
+          "olcek": 1.0
+        },
+        "agirlik": 4,
+        "bastirma": []
+      },
+      "UEBA-0001": {
+        "durum": "yayinda",
+        "kosullar": [
+          "saat_sapmasi_z > 3.0 or (mesai_disi_giris_sayisi >= 1 and mesai_disi_giris_poisson_p < 0.01)"
+        ],
+        "siddet": {
+          "sinyal": "saat_sapmasi_z",
+          "esik": 3.0,
+          "olcek": 1.5
+        },
+        "agirlik": 5,
+        "bastirma": [
+          "servis_hesaplari",
+          "yedekleme_penceresi"
+        ]
+      },
+      "UEBA-0002": {
+        "durum": "yayinda",
+        "kosullar": [
+          "yeni_uygulama_sayisi >= 1 or yeni_hassas_uygulama >= 1",
+          "profil_gun >= 30"
+        ],
+        "siddet": {
+          "sinyal": "yeni_hassas_uygulama",
+          "esik": 0.5,
+          "olcek": 0.5
+        },
+        "agirlik": 4,
+        "bastirma": [
+          "servis_hesaplari"
+        ]
+      },
+      "UEBA-0003": {
+        "durum": "yayinda",
+        "kosullar": [
+          "veri_hacmi_anomali_z > 3.5"
+        ],
+        "siddet": {
+          "sinyal": "veri_hacmi_anomali_z",
+          "esik": 3.5,
+          "olcek": 2.0,
+          "akran_olcekleyici": "veri_hacmi_akran_kati"
+        },
+        "agirlik": 8,
+        "bastirma": [
+          "servis_hesaplari",
+          "izin_donusu"
+        ]
+      },
+      "UEBA-0004": {
+        "durum": "yayinda",
+        "kosullar": [
+          "imkansiz_seyahat == 1"
+        ],
+        "siddet": {
+          "sinyal": "seyahat_hizi_kmh",
+          "esik": 900.0,
+          "olcek": 600.0
+        },
+        "agirlik": 7,
+        "bastirma": []
+      },
+      "UEBA-0005": {
+        "durum": "yayinda",
+        "kosullar": [
+          "yeni_cihaz_sayisi + yeni_ulke_sayisi >= 1 or baskasinin_cihazi_sayisi >= 1",
+          "profil_gun >= 14"
+        ],
+        "siddet": {
+          "sinyal": "cihaz_yenilik_akran_nadirlik",
+          "esik": 2.0,
+          "olcek": 0.7
+        },
+        "agirlik": 4,
+        "bastirma": []
+      },
+      "UEBA-0006": {
+        "durum": "yayinda",
+        "kosullar": [
+          "basarisiz_giris_poisson_p < 0.001",
+          "basarisiz_giris_sayisi >= 5"
+        ],
+        "siddet": {
+          "sinyal": "basarisiz_giris_poisson_p",
+          "esik": 0.001,
+          "olcek": 2.0,
+          "donusum": "log10"
+        },
+        "agirlik": 5,
+        "bastirma": []
+      },
+      "UEBA-0007": {
+        "durum": "yayinda",
+        "kosullar": [
+          "saat_sapmasi_z > 3.0 or mesai_disi_dosya_orani > 0.5",
+          "dosya_sayisi_poisson_p < 0.001"
+        ],
+        "siddet": {
+          "sinyal": "dosya_sayisi_poisson_p",
+          "esik": 0.001,
+          "olcek": 3.0,
+          "donusum": "log10",
+          "akran_olcekleyici": "dosya_sayisi_akran_kati"
+        },
+        "agirlik": 8,
+        "bastirma": [
+          "servis_hesaplari",
+          "yedekleme_penceresi",
+          "izin_donusu"
+        ]
+      },
+      "UEBA-0008": {
+        "durum": "yayinda",
+        "kosullar": [
+          "hesap_yasi_gun < 30",
+          "kesif_genisligi_akran_kati > 3.0 or kesif_sureci_sayisi >= 3"
+        ],
+        "siddet": {
+          "sinyal": "kesif_genisligi_akran_kati",
+          "esik": 3.0,
+          "olcek": 2.0
+        },
+        "agirlik": 6,
+        "bastirma": []
+      },
+      "UEBA-0009": {
+        "durum": "golge-modda",
+        "kosullar": [
+          "akran_yapisal_mesafe > 3.0",
+          "profil_gun >= 7"
+        ],
+        "siddet": {
+          "sinyal": "akran_yapisal_mesafe",
+          "esik": 3.0,
+          "olcek": 1.5
+        },
+        "agirlik": 4,
+        "bastirma": []
+      },
+      "UEBA-0017": {
+        "durum": "yayinda",
+        "kosullar": [
+          "usb_sayisi >= 1",
+          "usb_ilk_kez == 1 or usb_poisson_p < 0.001 or usb_7g_poisson_p < 0.001"
+        ],
+        "siddet": {
+          "sinyal": "usb_anomali_p",
+          "esik": 0.05,
+          "olcek": 2.0,
+          "donusum": "log10"
+        },
+        "agirlik": 6,
+        "bastirma": [
+          "servis_hesaplari"
+        ]
+      },
+      "UEBA-0021": {
+        "durum": "yayinda",
+        "kosullar": [
+          "hassas_7g_toplam >= 5",
+          "hassas_7g_p < 0.001"
+        ],
+        "siddet": {
+          "sinyal": "hassas_7g_p",
+          "esik": 0.05,
+          "olcek": 2.0,
+          "donusum": "log10"
+        },
+        "agirlik": 4,
+        "bastirma": [
+          "servis_hesaplari"
+        ]
+      },
+      "UEBA-IF01": {
+        "durum": "golge-modda",
+        "kosullar": [
+          "if_anomali_pct > 0.995"
+        ],
+        "siddet": {
+          "sinyal": "if_anomali_pct",
+          "esik": 0.995,
+          "olcek": 0.003
+        },
+        "agirlik": 3,
+        "bastirma": [
+          "servis_hesaplari"
+        ]
+      }
+    },
+    "tenant_varsayilanlari": {
+      "alarm_budget_per_day": 30,
+      "critical_percentile": 0.999,
+      "kuyruk_dogrulama": true,
+      "kuyruk_tekrar_gun": 3,
+      "kuyruk_kacis_yuzdelik": 0.998,
+      "short_window_days": 7,
+      "long_window_days": 90,
+      "poisoning_drift_z": 2.5,
+      "min_peer_group": 8,
+      "behavioral_peer_min_days": 30,
+      "decay_full_hours": 24.0,
+      "decay_floor_7d": 0.3,
+      "horizon_days": 7,
+      "dq_min_volume_ratio": 0.3,
+      "dq_max_late_ratio": 0.2,
+      "dq_max_unresolved_ratio": 0.2,
+      "shadow_min_days": 14,
+      "shadow_min_precision": 0.25,
+      "shadow_max_daily_alerts": 2.0,
+      "suppression_default_days": 90,
+      "threshold_jitter": 0.05,
+      "supervised_min_labels": 200,
+      "fusion_temporal_weight": 0.7,
+      "fusion_structural_weight": 0.3,
+      "available_sources": [
+        "ad",
+        "hr",
+        "proxy",
+        "edr",
+        "vpn",
+        "file_server",
+        "dlp"
+      ],
+      "correlation_multipliers": true,
+      "peer_context": true,
+      "prediction_weight": 0.0,
+      "peer_neutral_ratio": 5.0,
+      "accumulator_windows": [
+        1,
+        3,
+        7,
+        14,
+        30
+      ],
+      "source_diversity_min": 3,
+      "source_diversity_multiplier": 0.0,
+      "asset_tiers": {},
+      "tier0_multiplier": 0.0,
+      "tier1_multiplier": 0.0,
+      "priority_momentum_weight": 0.0,
+      "priority_diversity_weight": 0.0,
+      "priority_asset_weight": 0.0,
+      "priority_peer_weight": 0.0,
+      "graf_enabled": false,
+      "graf_agirligi": 0.0,
+      "graf_gecmis_gun": 30,
+      "graf_seyrek_esik": 3,
+      "graf_yayilim_adim": 2,
+      "graf_yayilim_sonum": 0.5,
+      "bayes_kapi_esigi": 0.0,
+      "bayes_min_gozlem": 10,
+      "adwin_enabled": false,
+      "adwin_delta": 0.002,
+      "belirsizlik_enabled": false,
+      "kanit_dogrulama": "kapali",
+      "cok_ajanli_rapor": false
+    },
+    "motor": {
+      "PEER_NEUTRAL_RATIO": 5.0,
+      "PEER_FACTOR_MIN": 0.2,
+      "PEER_FACTOR_MAX": 2.0
+    },
+    "ozellik_tabanlari": {
+      "bytes_out": 5000000.0,
+      "files_accessed": 1.0,
+      "failed_logon_count": 0.5,
+      "logon_count": 0.5,
+      "distinct_resources": 0.5,
+      "event_count": 2.0,
+      "sensitive_access_count": 0.5,
+      "recon_process_count": 0.5,
+      "proc_count": 1.0,
+      "usb_count": 0.5,
+      "offhours_ratio": 0.05,
+      "distinct_apps_n": 0.5,
+      "offhours_logon_count": 0.3
+    },
+    "cert_url_kategorileri": {
+      "cloud_storage": [
+        "wikileaks",
+        "dropbox",
+        "box.com",
+        "drive.google",
+        "mega.",
+        "mediafire",
+        "4shared",
+        "onedrive",
+        "wetransfer",
+        "sendspace",
+        "rapidshare",
+        "hightail",
+        "filedropper",
+        "pastebin"
+      ],
+      "job_search": [
+        "job",
+        "career",
+        "monster.com",
+        "indeed",
+        "glassdoor",
+        "dice.com",
+        "simplyhired",
+        "linkedin",
+        "craigslist",
+        "recruit",
+        "hiring",
+        "resume"
+      ],
+      "hacking_tools": [
+        "keylog",
+        "keystroke",
+        "spyware",
+        "hack",
+        "crack",
+        "exploit",
+        "malware",
+        "rootkit",
+        "stealth",
+        "sniff",
+        "spector",
+        "monitoring",
+        "surveillance",
+        "trojan",
+        "backdoor"
+      ],
+      "webmail": [
+        "gmail",
+        "yahoo",
+        "hotmail",
+        "aol.com",
+        "mail.",
+        "outlook.com"
+      ],
+      "social": [
+        "facebook",
+        "twitter",
+        "youtube",
+        "myspace",
+        "reddit",
+        "flickr"
+      ]
+    }
+  }
+}

@@ -18,8 +18,12 @@ from ztp.data.dataset import Dataset
 from ztp.deception import UNATTRIBUTED_COLUMNS, HoneytokenRegistry
 from ztp.detection.catalog import export_catalog
 from ztp.detection.engine import DetectionEngine, Hit
+from ztp.drift import Adwin
 from ztp.features import extract_device_day, extract_features
 from ztp.feedback import LabelStore
+from ztp.gnn.bayesian_gate import BayesKapisi
+from ztp.gnn.temporal_graph import TemporalHeteroGraph
+from ztp.gnn.tgn_model import TemporalGraphBaseline
 from ztp.graph.analysis import DeepGraphAnalyzer, GraphFindings
 from ztp.graph.knowledge import KnowledgeGraph
 from ztp.graph.observation import ObservationGraphBuilder
@@ -110,6 +114,21 @@ class ZeroTrustPredictionPipeline:
         self.graph_builder = ObservationGraphBuilder(self.store, self.crit)
         self.deep = DeepGraphAnalyzer(self.cfg, self.store, self.kg, self.crit, int((~d.directory.is_service.astype(bool)).sum()))
         self.scorer = RiskScorer(self.cfg, self.kg, self.labels)
+        # v4 bileşenleri — hepsi yapılandırmayla açılır, kapalıyken kurulmazlar bile (maliyet sıfır)
+        self.tgraph: Optional[TemporalHeteroGraph] = None
+        self.tgnn = (
+            TemporalGraphBaseline(
+                gecmis_gun=self.cfg.graf_gecmis_gun,
+                seyrek_esik=self.cfg.graf_seyrek_esik,
+                adim=self.cfg.graf_yayilim_adim,
+                sonum=self.cfg.graf_yayilim_sonum,
+            )
+            if self.cfg.graf_enabled
+            else None
+        )
+        self.adwin: Dict[str, Adwin] = {}
+        self.bayes = BayesKapisi(esik=self.cfg.bayes_kapi_esigi, min_gozlem=self.cfg.bayes_min_gozlem)
+        self.bayes_elenen: Dict[pd.Timestamp, List[dict]] = {}
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
 
     def _ingest(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -148,6 +167,11 @@ class ZeroTrustPredictionPipeline:
     def run(self, start: pd.Timestamp, end: pd.Timestamp, warmup_days: int) -> None:
         self.events = self._ingest(self.data.events)
         self.events_by_day = {k: g for k, g in self.events.groupby(self.events["time"].dt.normalize())}
+        if self.cfg.graf_enabled:  # v4 (§1.1): temporal heterogeneous graph pencere başına bir kez kurulur
+            t0 = time.perf_counter()
+            self.tgraph = TemporalHeteroGraph.olaylardan(self.events)
+            self.health.time("temporal_graf", t0)
+            LOG.info("Temporal graf: %s", json.dumps(self.tgraph.ozet(), ensure_ascii=False))
         LOG.info(
             "Hazırlık: %d olay, %d varlık-gün, %d kullanıcı, akran grupları=%s",
             len(self.events),
@@ -365,6 +389,19 @@ class ZeroTrustPredictionPipeline:
         # 4) Prediction: geçici günlük risk (UEBA) → yörünge/rejim sinyalleri → prediction tespitleri
         t0 = time.perf_counter()
         results: Dict[str, RiskResult] = {}
+        # v4 (§1.1/§3): graf sinyalleri. Tohum = günün ham UEBA riski; yayılım paylaşılan varlıklar üzerinden.
+        if self.tgnn is not None and self.tgraph is not None:
+            tg0 = time.perf_counter()
+            tohum = {}
+            for sid in signals:
+                ham = sum(h.weight * h.severity for h in hits_today[sid])
+                if ham > 0:
+                    tohum[sid] = min(1.0, ham / 10.0)
+            for sid, gs in self.tgnn.toplu(self.tgraph, list(signals), day, tohum).items():
+                signals[sid].update(gs.sozluk())
+                if gs.graf_riski > 0:
+                    explains[sid]["graf_riski"] = gs.aciklama()
+            self.health.time("graf_sinyalleri", tg0)
         for sid in signals:
             self.scorer.add_hits(sid, hits_today[sid])
             prov = self.scorer.compute(sid, day, signals[sid])
@@ -382,11 +419,24 @@ class ZeroTrustPredictionPipeline:
             self.scorer.add_hits(sid, ph)
             results[sid] = self.scorer.compute(sid, day, signals[sid])
             self.final_risk[sid][day] = results[sid].raw
+            if self.cfg.adwin_enabled:  # v4 (§1.4): davranış kayarsa kişisel baz çizgisi o günden başlar
+                a = self.adwin.get(sid)
+                if a is None:
+                    a = self.adwin[sid] = Adwin(delta=self.cfg.adwin_delta)
+                if a.ekle(results[sid].raw) is not None:
+                    self.profile.adwin_cut[sid] = day
         self.health.time("prediction", t0)
         # 5) kalibrasyon + alarm bütçesi
         t0 = time.perf_counter()
         self.scorer.calibrate(day, results)
         queue = self.scorer.select_queue(day, results, signals)
+        if self.cfg.bayes_kapi_esigi > 0:  # v4 (§1.3): zayıf kanıtlı vakalar bütçede yer olsa da alınmaz
+            kural_haritasi = {sid: [h.rule_id for h in self.scorer.hit_log.get(sid, []) if h.day == day] for sid in queue}
+            kritikler = {sid for sid in queue if results[sid].critical}
+            queue, elenen = self.bayes.suz(queue, kural_haritasi, kritikler)
+            if elenen:
+                self.bayes_elenen[day] = [k.ozet() for k in elenen]
+                LOG.info("Bayes kapısı %d vaka eledi (gün %s)", len(elenen), day.date())
         self.health.time("skorlama", t0)
         self.health.rule_errors = self.engine.errors
         self.health.profile_fresh[str(day.date())] = f"baseline {len(ctx.p_med)} kullanıcı, pencere {cfg.long_window_days}g"

@@ -77,6 +77,11 @@ class RiskScorer:
             mult["tier0_varlik"] = self.cfg.tier0_multiplier
         elif katman == 1 and self.cfg.tier1_multiplier > 0:
             mult["tier1_varlik"] = self.cfg.tier1_multiplier
+        # v4: graf riski (revizeler2 §3 RiskScore-Guided GNN). Davranışsal skoru EZMEZ, ona oranla büyütür:
+        # çarpan 1 + agirlik·graf_riski ∈ [1, 1+agirlik]. graf_riski = 0 ya da ağırlık 0 iken çarpan hiç eklenmez.
+        graf_riski = float(signals.get("graf_riski", 0.0) or 0.0)
+        if self.cfg.graf_agirligi > 0 and graf_riski > 0:
+            mult["graf_riski"] = 1.0 + self.cfg.graf_agirligi * graf_riski
         if not self.cfg.correlation_multipliers:  # 19.5 ablasyon: çarpanlar kapalı
             mult = {}
         if today and self.labels.fp_pattern_match(sid, {h.rule_id for h in today}, day):

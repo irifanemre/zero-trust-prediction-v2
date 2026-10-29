@@ -68,6 +68,8 @@ class ProfileEngine:
         self.edr_days: Dict[str, Set[pd.Timestamp]] = defaultdict(set)
         self.ad_users_on_device: Dict[Tuple[str, pd.Timestamp], Set[str]] = {}
         self.shared_devices: Set[str] = set()
+        # v4 (§1.4): ADWIN'in saptadığı kayma günleri. Boşken `context()` eskisi gibi davranır (bkz. orada).
+        self.adwin_cut: Dict[str, pd.Timestamp] = {}
         self._dev_stats: Dict[str, list] = {}  # cihaz → [toplam oturum, sahibin oturumu, kullanıcı kümesi]
 
     # ---- artımlı besleme ------------------------------------------------------
@@ -150,6 +152,12 @@ class ProfileEngine:
         if len(rc):
             cut = hist["sid"].map(rc)
             hist = hist[cut.isna() | (hist["day"] >= cut)]
+        # v4 (§1.4): ADWIN kavram kayması saptadıysa kişisel baz çizgisi kayma gününden başlar. Rol değişimiyle
+        # aynı mantık — orada kesim İK'dan gelir, burada davranışın kendisinden. Kayma yoksa sözlük boştur ve
+        # bu blok hiçbir şey yapmaz, yani varsayılan davranış birebir korunur.
+        if self.adwin_cut:
+            akut = hist["sid"].map(self.adwin_cut)
+            hist = hist[akut.isna() | (hist["day"] >= akut)]
         short = hist[hist["day"] >= day - cfg.short_window_days * DAY]
         gp = hist.groupby("sid")
         p_med = gp[NUM_FEATURES].median()

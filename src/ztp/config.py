@@ -100,6 +100,21 @@ class TenantConfig:
     priority_asset_weight: float = 0.0  # dokunulan en yüksek varlık katmanı
     priority_peer_weight: float = 0.0  # akran grubundan yapısal sapma
 
+    # --- v4: revizeler.txt / revizeler2.txt bileşenleri. HEPSİ varsayılanda kapalı; açılması ablasyona bağlı (14.5)
+    graf_enabled: bool = False  # temporal heterogeneous graph sinyalleri üretilsin mi (üretmek skoru değiştirmez)
+    graf_agirligi: float = 0.0  # graf riskinin skor çarpanına katkısı: 1 + agirlik·graf_riski. 0 → skor değişmez
+    graf_gecmis_gun: int = 30  # graf sinyallerinde kişisel geçmiş penceresi
+    graf_seyrek_esik: int = 3  # bu sayıdan az akranın dokunduğu hedef "seyrek"
+    graf_yayilim_adim: int = 2  # risk yayılımı kaç adım (revizeler2 §3)
+    graf_yayilim_sonum: float = 0.5
+    bayes_kapi_esigi: float = 0.0  # 0 → kapalı. Sonsal olasılığı bunun altındaki vaka kuyruğa alınmaz (§1.3)
+    bayes_min_gozlem: int = 10  # bu kadar etiketi olmayan örüntü susturulmaz
+    adwin_enabled: bool = False  # kavram kayması baz çizgisini kessin mi (§1.4)
+    adwin_delta: float = 0.002
+    belirsizlik_enabled: bool = False  # Venn-Abers olasılık aralığı vakaya eklensin mi (§1.2)
+    kanit_dogrulama: str = "kapali"  # kapali | dengeli | siki — LLM özetinde referanssız cümleler (§7.2)
+    cok_ajanli_rapor: bool = False  # Investigator/Verifier/Reporter zinciri (§7.3)
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")
@@ -122,6 +137,24 @@ class TenantConfig:
         unknown_tiers = set(self.asset_tiers) - {"tier0", "tier1"}
         if unknown_tiers:
             raise ValueError(f"asset_tiers: yalnız tier0/tier1 (bilinmeyen: {sorted(unknown_tiers)})")
+        if self.graf_agirligi < 0 or self.graf_agirligi > 5:
+            raise ValueError("graf_agirligi [0, 5] aralığında olmalı")
+        if self.graf_agirligi and not self.graf_enabled:
+            raise ValueError("graf_agirligi > 0 için graf_enabled açık olmalı (sinyal üretilmeden çarpan uygulanamaz)")
+        if self.graf_gecmis_gun < 1 or self.graf_gecmis_gun > self.long_window_days:
+            raise ValueError("graf_gecmis_gun 1 ile uzun pencere arasında olmalı")
+        if self.graf_seyrek_esik < 1:
+            raise ValueError("graf_seyrek_esik ≥ 1 olmalı")
+        if self.graf_yayilim_adim < 1 or not 0 < self.graf_yayilim_sonum <= 1:
+            raise ValueError("graf_yayilim_adim ≥ 1 ve graf_yayilim_sonum (0, 1] olmalı")
+        if not 0 <= self.bayes_kapi_esigi < 1:
+            raise ValueError("bayes_kapi_esigi [0, 1) aralığında olmalı (0 = kapalı)")
+        if self.bayes_min_gozlem < 0:
+            raise ValueError("bayes_min_gozlem negatif olamaz")
+        if not 0 < self.adwin_delta < 1:
+            raise ValueError("adwin_delta (0, 1) aralığında olmalı")
+        if self.kanit_dogrulama not in ("kapali", "dengeli", "siki"):
+            raise ValueError("kanit_dogrulama: kapali | dengeli | siki")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)
