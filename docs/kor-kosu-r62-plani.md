@@ -108,6 +108,19 @@ görülmemiş kategoriler için de satır üretir — `count=0`, zaman damgası 
 Kural artık yoruma bırakılmıyor: `tests/test_bellek_optimizasyonu.py` her `groupby` çağrısının anahtarını ve
 `observed` bayrağını **AST ile** denetler. Kategoriye çevrilen bir kolon donmuş bir dosyada anahtar olursa test düşer.
 
+**Kabul ölçütünün sonucu (29 Ekim 2026, r4.2, 90 gün + 21 gün ısınma, bütçe 10):**
+
+| | Optimizasyon kapalı | Optimizasyon açık |
+|---|---|---|
+| Kuyruk (gün gün kullanıcı listesi) | — | **birebir aynı** |
+| Kural tetiklenme sayıları | — | **birebir aynı** |
+| Kapsama sonuçları | — | **birebir aynı** |
+| Vaka sayısı | 729 | **729** |
+| Çerçeve belleği | 8,69 GB (655,4 B/olay) | **3,32 GB (250,0 B/olay)** — 2,62× |
+| Süre | 862 sn | 822 sn |
+
+Çıktı: `"esdeger": true`, `"farkli_alanlar": []`. Ölçüt sağlandı, uyarlama kör koşuya girebilir.
+
 **Bu uyarlama tespit mantığına ait değildir:** `cert.py` ve `graph/observation.py` dondurma manifestinde yoktur,
 v3 dondurması bozulmadı (`donmuş durumla aynı`). Koşu, eşdeğerlik çıktısında `"esdeger": true` görülmeden başlamaz.
 
