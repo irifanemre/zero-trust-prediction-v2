@@ -245,9 +245,47 @@ precision@1'in r6.2'de düşmesi model kötüleşmesi değil **taban oranı etki
 55 kat düşük (binde 0,36). Yanlış alarm oranının üç veri setinde de %18–29 bandında kalması, kuralların tek bir
 veri setine ezberlenmediğini gösterir. Ayrıntı ve sapma kayıtları: [`docs/kor-kosu-r62-sonuclar.md`](docs/kor-kosu-r62-sonuclar.md).
 
-**Recall@K (r4.2, 34 insider):** analist kapasitesi 5'ten sonra doygunluğa ulaşıyor — kapasiteyi 5'ten 30'a
-çıkarmak tek bir insider daha kazandırmıyor (`recall@5_kullanici = recall@30_kullanici = 0,618`). Kaçırılan
-insider'lar bir kapasite sorunu değil, bir sıralama/tespit sorunudur.
+### v4 bileşenlerinin ölçümü (r4.2, 90 gün, bütçe 10)
+
+Aynı veri, aynı pencere, aynı kurallar; tek değişken yapılandırma. **Model A** = bütün v4 bileşenleri kapalı,
+**hepsi açık** = graf + ADWIN + Bayes kapısı + belirsizlik birlikte.
+
+| Ölçüt | Model A | Hepsi açık | |
+|---|---|---|---|
+| **Yakalanan insider** (34 üzerinden) | 21 | **26** | ▲ +5 |
+| Kuyruğa giren kullanıcı | 112 | 221 | ▼ iki katı |
+| Toplam vaka | 729 | 958 | ▼ +%31 |
+| Doğru / yanlış | 74 / 655 | 125 / 833 | |
+| **precision@1** | **0,42** | 0,244 | ▼ |
+| precision@10 | 0,109 | **0,135** | ▲ |
+| **recall@1** (kullanıcı) | **0,471** | 0,353 | ▼ |
+| recall@5 (kullanıcı) | 0,618 | **0,676** | ▲ |
+| **recall@10** (kullanıcı) | 0,618 | **0,765** | ▲ |
+| recall@30 (kullanıcı) | 0,618 | 0,765 | ▲ |
+| Süre | 822 sn | 3508 sn | ▼ 4,3× |
+
+**Doygunluk kırıldı, ama ilk sıra bozuldu.** Model A'da K=5'ten sonra hiçbir kazanım yoktu; v4 ile kazanım K=10'a
+kadar sürüyor (0,618 → 0,765) ve "sıralaması yetmediği için kuyruğa giremedi" diyen 6 insider 2'ye iniyor.
+Buna karşılık sıralama **düzleşiyor**: insider'lar ilk 10'a yayılıyor ama tepeden düşüyor. Yalnız en üstteki
+vakaya bakan bir analist için sistem **kötüleşti**, 10 vakaya bakan için iyileşti.
+
+**Bedava bir kazanç değil:** +5 insider karşılığında +178 yanlış pozitif kullanıcı. Oran kabaca orantılı — "daha
+çok gör, daha çok çalış". İyi bir takas olup olmadığı analist kapasitesine bağlıdır.
+
+**Bileşenler gerçekte ne yaptı:**
+
+| Bileşen | Etki |
+|---|---|
+| Temporal graf | 28,3M kenar, 977 kullanıcı, 1930 hedef |
+| ADWIN | **117 kullanıcıda** baz çizgisini kesti (958 izlenen) |
+| Bayes kapısı | **0 vaka eledi** — tasarım gereği: analist etiketi yok, etiketsiz örüntü susturulmaz |
+
+"Hiç tetiklenmedi" grubu 7 → 6'ya indi. Graf **çarpan** olduğu için tabanı sıfır olan kullanıcıya ulaşamaz;
+bu kazanım ADWIN'den gelmiş olmalı — baz çizgisi kesilince daha önce normal görünen davranış anomali hâline
+geldi. Bu bir çıkarımdır, ölçüm değil: bileşenler birlikte açıldığı için katkı ayrıştırılamıyor.
+
+**Çekinceler:** (1) r4.2 kuralların ayarlandığı veridir, yani üst sınır. (2) Bileşenler birlikte açıldı; tek tek
+ablasyon yapılmadı. (3) Süre 4,3 katına çıktı — gerçek kurumda günlük koşu için ciddi bir maliyet.
 
 ## Lisans
 
