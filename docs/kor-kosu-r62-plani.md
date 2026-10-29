@@ -87,6 +87,30 @@ beklentiler (2–4 insider yakalanır) **değişmedi** — tadil neyin ölçüld
 Onarım kuralı hiçbir tespit kuralına, eşiğe ya da skora dokunmaz; `cert.py` dondurma manifestinde **değildir**
 (yükleyici, kural değil), dolayısıyla v3 dondurması bozulmaz.
 
+### 2.3 Bellek uyarlaması ve kabul ölçütünün yakaladığı hata
+
+r6.2'nin en büyük penceresi, r4.2'de ölçülen olay başına 734 baytla **~37 GB** tepe bellek demekti; makinede 24 GB var.
+Çözüm, olay tablosundaki tekrar eden metin kolonlarını kategorik tipe çevirmek (olay başına 734 → ~197 bayt).
+
+Bu uyarlamanın şartı §2'de ilan edilmişti: **r4.2'de kural tetikleme sayıları ve kapsama sonuçları birebir aynı kalmalı**
+(`scripts/bellek_esdegerlik.py`, aynı veriyi optimizasyon açık ve kapalı iki kez koşar). Ölçüt işe yaradı ve
+**sessiz bir davranış değişikliği yakaladı:**
+
+Pandas'ta kategorik bir kolon **groupby anahtarı** olduğunda, `observed=False` (bugünkü varsayılan) o gün hiç
+görülmemiş kategoriler için de satır üretir — `count=0`, zaman damgası `NaT`. Nesne dtype'ında böyle satır yoktur.
+Ölçülen örnek: 3 satırlık veri, 26 kategorili kolonda **52 satır, 49'u hayalet**.
+
+| Tüketici | Durum | Etki | Düzeltme |
+|---|---|---|---|
+| `graph/observation.py` (kullanıcı→kaynak/app/ülke/IP, cihaz→süreç kenarları) | donmamış | graf her gün hayalet kenarlarla şişiyordu | her iki `groupby`'a `observed=True` — nesne dtype'ıyla birebir aynı |
+| `quality.py:32` (`groupby(["source","day"])`) | **donmuş** | o gün olay görmemiş kaynak için `n=0` satırı → veri kalitesi metrikleri bozulurdu | `source` kolonu kategoriye **çevrilmiyor** (donmuş dosyaya dokunulamaz) |
+
+Kural artık yoruma bırakılmıyor: `tests/test_bellek_optimizasyonu.py` her `groupby` çağrısının anahtarını ve
+`observed` bayrağını **AST ile** denetler. Kategoriye çevrilen bir kolon donmuş bir dosyada anahtar olursa test düşer.
+
+**Bu uyarlama tespit mantığına ait değildir:** `cert.py` ve `graph/observation.py` dondurma manifestinde yoktur,
+v3 dondurması bozulmadı (`donmuş durumla aynı`). Koşu, eşdeğerlik çıktısında `"esdeger": true` görülmeden başlamaz.
+
 ## 3. Veri, pencere ve ayarlar
 
 - **Pencere:** mekanik hesap. D0 = `logon.csv` ilk gün, D1 = son gün. Değerlendirme dönemi [D0 + 111 gün, D1].
