@@ -141,6 +141,40 @@ v3 dondurması bozulmadı (`donmuş durumla aynı`). Koşu, eşdeğerlik çıkt�
 - **Bölme:** `configs/splits/cert-r6.2-kullanici-bolmesi.json` (70/15/15, tohum 42, insider katmanlı).
   Üretildi ve işte sonucu: eğitim 2800 kullanıcı / 3 insider (S2, S3, S5), doğrulama 600 / 1 (S1), test 600 / 1 (S4).
 
+### 3.1 Ölçülen bellek, `f` ve örneklem katmanlarının tadili (koşudan önce)
+
+**29 Ekim 2026. Hâlâ hiçbir tespit/skor/kuyruk çıktısı üretilmedi.**
+
+`f`, plan gereği yalnız yükleyici ölçümüyle belirlendi (`scripts/r62_bellek_olcumu.py`, en büyük pencere P1
+2010-06-07 → 2010-09-04, tarihçesiyle 50,8M olay):
+
+| Ölçüm | Değer |
+|---|---|
+| Yüklenen olay | 50.797.375 |
+| Olay tablosu | 12,70 GB — **249,9 B/olay** (r4.2'de ölçülen 250,0 ile birebir tutuyor) |
+| Yükleme tepe RSS | **15,01 GB** |
+| Tespit payı (r4.2: tepe/yükleme = 9,73/8,64) | ×1,126 |
+| Beklenen tepe | **16,9 GB** — bütçe 12 GB'ın üstünde |
+| **Örneklem oranı `f`** | **0,70** (plan: `floor(min(1, 12/16,9)/0,05)·0,05`) |
+
+Örneklem gerekli. Kullanıcı filtresi yükleyicide **parça parça** uygulandığı için (1M'lik yığınlarda, `concat`'ten
+önce) örneklem belleği oransal düşürür: ~35,6M olay → beklenen tepe ~11,8 GB.
+
+**TADİL — örneklem katmanına bölme parçası eklendi.** Plan "katmanlar S1–S5 ve benign" diyordu. Böyle üretilen
+örneklem ölçüldü ve **bölmeyle çakıştığı** görüldü: bölme de örnekleyici de aynı sıralı nüfusu **tohum 42** ile
+karıştırdığından, "rastgele %70" tam olarak **eğitim parçasının kendisi** çıkıyordu.
+
+| Katmanlama | eğitim | doğrulama | test |
+|---|---|---|---|
+| yalnız senaryo (plandaki hâli) | 2654/2800 (%95) | **103/600 (%17)** | **45/600 (%7,5)** |
+| senaryo × parça (tadil) | 1961/2800 (%70,0) | 420/600 (%70,0) | 420/600 (%70,0) |
+
+Çakışma, parça bazlı değerlendirmeyi ve yanlış alarm oranının parçalar arası karşılaştırmasını anlamsız kılıyordu.
+Tadil "tek oran" ve "tohum 42" ilkelerine dokunmaz, yalnız katmanı incelterek çakışmayı **yapısal olarak** imkânsız
+kılar. Sonuç: her parçadan tam %70, 5 insider'ın tamamı korunuyor, parça başına insider dağılımı değişmedi (3/1/1).
+
+Örneklem: `configs/splits/cert-r6.2-orneklem.json` — 2801 kullanıcı, 5 insider, insider oranı 0,00179.
+
 ## 4. Bu koşunun NE ölçebileceği — ve ne ölçemeyeceği
 
 r6.2'de senaryo başına tek insider var (toplam 5). Bu, metriklerin yorumunu baştan belirler:

@@ -4,6 +4,7 @@
 r5.2 hazırlığının (kor_kosu_hazirlik.py) r6.2 karşılığı; ortak yardımcılar oradan alınır. Yapılanlar:
   sayim   Yükleyicinin filtreleriyle gün gün olay sayımı, D0/D1, 90 günlük pencereler ve pencere başına
           tahmini tepe bellek (r4.2'de ölçülen olay başına bayt ile). Yalnız tarih/aktivite kolonları okunur.
+  orneklem Plan §3 adım 2: ölçülen `f` ile tek oranlı katmanlı örneklem (S1–S5 + benign, tohum 42).
   bolme   70/15/15 kullanıcı bölmesi (tohum 42): yalnız LDAP kullanıcı listesi ve cevap anahtarındaki
           insider senaryo katmanıyla. Tespit çıktısına bakılmaz.
 
@@ -13,6 +14,7 @@ yakalama oranı kaba bir metriktir (her insider %20); belgenin asıl ölçtüğ�
 Kullanım:
     python scripts/kor_kosu_r62_hazirlik.py sayim --cert-dir .../cert_data/r6.2 --out .../ztp_out_r62_hazirlik
     python scripts/kor_kosu_r62_hazirlik.py bolme --cert-dir .../cert_data/r6.2
+    python scripts/kor_kosu_r62_hazirlik.py orneklem --cert-dir .../cert_data/r6.2 --out .../ztp_out_r62_hazirlik
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ from ztp.schema import DAY  # noqa: E402
 LOG = logging.getLogger("kor_r62")
 REPO = Path(__file__).resolve().parents[1]
 R62_SPLIT = REPO / "configs" / "splits" / "cert-r6.2-kullanici-bolmesi.json"
+R62_SAMPLE = REPO / "configs" / "splits" / "cert-r6.2-orneklem.json"  # plan §3 adım 2 (f, katmanlı, tohum 42)
 
 
 def population(cert_dir: Path) -> tuple[list[str], dict]:
@@ -135,14 +138,81 @@ def cmd_bolme(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_orneklem(args: argparse.Namespace) -> int:
+    """Plan §3 adım 2: tek oranlı katmanlı örneklem. `f`, r62_bellek_olcumu.json'daki ÖLÇÜMDEN gelir."""
+    olcum = json.loads((Path(args.out) / "r62_bellek_olcumu.json").read_text(encoding="utf-8"))
+    f = olcum["orneklem_orani_f"]
+    if f >= 1.0:
+        LOG.info("f=%.2f — örneklem gerekmiyor, tüm kurum koşulur", f)
+        return 0
+    users, strata = population(Path(args.cert_dir))
+    atama = json.loads(R62_SPLIT.read_text(encoding="utf-8"))["atama"]
+    # Katman = (70/15/15 parçası × senaryo|benign). Parçanın katmana girmesi ZORUNLU: bölme de tohum 42 ile aynı
+    # sıralı nüfusu karıştırdığından, yalnız senaryoya göre katmanlanan örneklem bölmeyle ÇAKIŞIR ve "rastgele %70"
+    # tam olarak eğitim parçası çıkar (ölçüldü: eğitim 2654/2800, doğrulama 103/600, test 45/600). Parça katmana
+    # girince her parçadan tam olarak f oranı seçilir ve çakışma yapısal olarak imkânsızlaşır.
+    groups: dict = {}
+    for u in users:
+        groups.setdefault(f"{atama.get(u, 'atanmamis')}|{strata.get(u, 'benign')}", []).append(u)
+    rng = np.random.RandomState(42)
+    chosen, ozet = [], {}
+    for key in sorted(groups):  # her katmandan aynı oran f (yarım yukarı yuvarlanır), katman içinde tohumlu seçim
+        n = int(np.floor(f * len(groups[key]) + 0.5))
+        chosen += sorted(rng.choice(groups[key], size=n, replace=False).tolist())
+        ozet[key] = dict(nufus=len(groups[key]), secilen=n)
+    n_ins = sum(v["secilen"] for k, v in ozet.items() if not k.endswith("|benign"))
+    doc = dict(
+        meta=dict(
+            f=f,
+            tohum=42,
+            yontem=(
+                "tek oranlı katmanlı örneklem (plan §3 adım 2, §3.1 tadili): katman = (70/15/15 parçası × S1–S5|benign); "
+                "her katmandan floor(f·n + 0,5), katman içinde tohum 42. Parça katmana girer, çünkü bölme de aynı tohumla "
+                "aynı sıralı nüfusu karıştırır; yalnız senaryoya göre katmanlamak örneklemi eğitim parçasına çakıştırıyordu."
+            ),
+            gerekce=dict(
+                olculen_tepe_rss_gb=olcum["olculen_tepe_rss_gb"],
+                beklenen_tepe_gb=olcum["beklenen_tepe_gb"],
+                bellek_butcesi_gb=olcum["bellek_butcesi_gb"],
+            ),
+            katmanlar=ozet,
+            kullanici=len(chosen),
+            insider=n_ins,
+            insider_orani=round(n_ins / len(chosen), 5),
+            nufus_insider_orani=round(len(strata) / len(users), 5),
+        ),
+        kullanicilar=sorted(chosen),
+    )
+    R62_SAMPLE.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    LOG.info("Örneklem: %s — %s", R62_SAMPLE, json.dumps(doc["meta"]["katmanlar"], ensure_ascii=False))
+    if n_ins != len(strata):
+        LOG.error("İnsider KAYBI: %d/%d — f çok düşük, plan §3 gözden geçirilmeli", n_ins, len(strata))
+        return 1
+    # Bölmenin parçaları örneklemle kesişince her parçada insider kalmalı (test parçası tek insider'lı)
+    atama = json.loads(R62_SPLIT.read_text(encoding="utf-8"))["atama"]
+    sec = set(chosen)
+    eksik = []
+    for parca in ("egitim", "dogrulama", "test"):
+        tum = [u for u, p in atama.items() if p == parca]
+        kalan = [u for u in tum if u in sec]
+        kalan_ins = [u for u in kalan if u in strata]
+        LOG.info("%s: %d → %d kullanıcı, insider %d", parca, len(tum), len(kalan), len(kalan_ins))
+        if not kalan_ins:
+            eksik.append(parca)
+    if eksik:
+        LOG.error("Örneklem bir parçanın insider'ını düşürdü: %s — plan §3 gözden geçirilmeli", ", ".join(eksik))
+        return 1
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("komut", choices=["sayim", "bolme"])
+    ap.add_argument("komut", choices=["sayim", "bolme", "orneklem"])
     ap.add_argument("--cert-dir", required=True)
     ap.add_argument("--out", default="./ztp_out/kor_r62_hazirlik")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    return dict(sayim=cmd_sayim, bolme=cmd_bolme)[args.komut](args)
+    return dict(sayim=cmd_sayim, bolme=cmd_bolme, orneklem=cmd_orneklem)[args.komut](args)
 
 
 if __name__ == "__main__":
