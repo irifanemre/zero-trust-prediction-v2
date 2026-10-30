@@ -16,6 +16,7 @@ Altı belge var. Hepsinin ayrı bir işi var; hangisini ne zaman okuyacağın a�
 | [`kor-kosu-r52-plani.md`](kor-kosu-r52-plani.md) | 197 | **Ön kayıt** — r5.2 koşusundan önce yazıldı. |
 | [`kor-kosu-r62-plani.md`](kor-kosu-r62-plani.md) | 222 | **Ön kayıt** — r6.2 koşusundan önce yazıldı. |
 | [`kor-kosu-r62-sonuclar.md`](kor-kosu-r62-sonuclar.md) | — | r6.2 kör koşu sonuçları (29 Ekim 2026): yakalama, yanlış alarm, kural sağlığı, r4.2/r5.2/r6.2 karşılaştırması ve sapma kaydı. |
+| [`r62-v4-olcumu.md`](r62-v4-olcumu.md) | — | r6.2'de v4 bileşenleri açık ölçüm (30 Ekim 2026) — **kör değil**. v3 ↔ v4 alan alan karşılaştırma; graf çarpanının yapısal tavanı. |
 
 ## Ön kayıt belgeleri neden var
 

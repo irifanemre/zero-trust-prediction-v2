@@ -287,6 +287,36 @@ geldi. Bu bir çıkarımdır, ölçüm değil: bileşenler birlikte açıldığ�
 **Çekinceler:** (1) r4.2 kuralların ayarlandığı veridir, yani üst sınır. (2) Bileşenler birlikte açıldı; tek tek
 ablasyon yapılmadı. (3) Süre 4,3 katına çıktı — gerçek kurumda günlük koşu için ciddi bir maliyet.
 
+### Aynı bileşenler r6.2'de (2801 kullanıcı, 360 gün, bütçe 30)
+
+r4.2'deki kazanç başka veride tekrarlanmadı. Aynı yedi bayrak, aynı bölme, aynı model, tek fark yapılandırma:
+
+| Ölçüt | v3 (kapalı) | v4 (hepsi açık) | |
+|---|---|---|---|
+| **Yakalanan insider** | **3/4** | **3/4** | — değişmedi |
+| Yanlış pozitif kullanıcı | 538 | **1114** | ▼ 2,07× |
+| precision@1 | 0,014 | **0,003** | ▼ ⅕'i |
+| **Erkenlik medyanı** | 0 gün | **10 gün** | ▲ +10 (n=3) |
+| Toplam vaka | 8.516 | 10.993 | ▼ +%29 |
+| Süre | 212 dk | 309 dk | ▼ 1,46× |
+
+**1.173 ek yanlış alarm, sıfır ek insider.** Kaçırılan senaryo (S5) hiçbir kural tetiklemiyor; graf skora
+*çarpan* olarak girdiği için `1,5 × 0 = 0` — tabanı sıfır olan kullanıcıya ulaşamaz. Yapısal tavan budur ve
+bu ölçüm onu doğruladı. Kuyruğun 1,93× şişmesi, zaten tetiklenen kuralların büyütülmesinden geliyor
+(PRED-0012 3,8×, UEBA-0017 3,2×).
+
+Tek gerçek kazanç erkenlik: S4 sızıntı gününde değil **10 gün önce** kuyruğa girdi. Ama n=3; bir senaryonun
+öne gelmesi üç gözlemlik medyanı sıfırdan ona taşır, bu "sistem 10 gün önce uyarır" demek değildir.
+
+Bu, v4 kazancının **r4.2'ye aşırı uyum** olduğuna dair ilk ciddi kanıttır — bayrak değerleri
+(`graf_agirligi=0,5`, `bayes_kapi_esigi=0,3`) orada seçildi. **Bu yüzden varsayılanlar değişmiyor:** v4
+bileşenlerinin tamamı `config.py`'de kapalı kalıyor, yalnızca `--ac` ile açılıyor ve açıldığı koşunun
+kaydına yazılıyor.
+
+> Bu ölçüm **kör değil**: r6.2 kör koşusu bir kez yapıldı, o veri yandı. Koşu kaydı bunu dosyanın içinde
+> taşıyor (`"tur": "… KÖR DEĞİL"`). Geriye kalan tek kör veri **r1** ve dokunulmadı.
+> Ayrıntı: [`docs/r62-v4-olcumu.md`](docs/r62-v4-olcumu.md).
+
 ## Lisans
 
 Apache-2.0 — bkz. [LICENSE](LICENSE).
