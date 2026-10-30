@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ztp.deception import TOKEN_COLUMN
-from ztp.schema import OCSF_AUTH, OCSF_NETWORK, RECON_CMD_HINTS, RECON_PROCESSES, SENSITIVE_APPS, haversine_km
+from ztp.schema import CLOUD_APPS, OCSF_AUTH, OCSF_NETWORK, RECON_CMD_HINTS, RECON_PROCESSES, SENSITIVE_APPS, haversine_km
 
 NUM_FEATURES = [
     "event_count",
@@ -77,10 +77,19 @@ def extract_features(ev_all: pd.DataFrame, critical_assets: Sequence[str]) -> pd
     # v2: hassas kategori (iş arama, bulut depolama, saldırı aracı) KULLANIM SAYISI — "ilk kez" sinyali, kategoriyi
     # zaten kullanan kişide artışı göremiyordu (CERT r5.2 S2). NUM_FEATURES dışında: IF ve akran kıyası değişmez.
     f["sensitive_app_count"] = ev[ev["app"].isin(SENSITIVE_APPS)].groupby(keys).size()
+    # v6-D: SIZINTI KANALI ayrı sayılır. Gerekçe (`docs/sprint-v6-on-kayit.md`, katman D): havuzlanmış sayaçta
+    # niyet sinyali (iş arama) yöntem sinyalini (bulut yükleme) maskeliyor. r6.2'de kaçan S5'te ölçüldü:
+    # kullanıcının havuz tabanı 11,99/gün, bulut tabanı 0,098/gün; olay günü 4 bulut olayı havuzda görünmez kaldı.
+    f["cloud_app_count"] = ev[ev["app"].isin(CLOUD_APPS)].groupby(keys).size()
     # aldatma katmanı: tuzak etkileşimi sayımı baseline'a GİRMEZ (NUM_FEATURES dışında) — deterministik sinyal
     has_token = ev[TOKEN_COLUMN].notna() if TOKEN_COLUMN in ev.columns else pd.Series(False, index=ev.index)
     f["honeytoken_count"] = ev[has_token].groupby(keys).size()
-    count_cols = [c for c in NUM_FEATURES if c in f.columns] + ["file_offhours_ratio", "honeytoken_count", "sensitive_app_count"]
+    count_cols = [c for c in NUM_FEATURES if c in f.columns] + [
+        "file_offhours_ratio",
+        "honeytoken_count",
+        "sensitive_app_count",
+        "cloud_app_count",  # v6-D: sızıntı kanalı sayacı da doldurulur (groupby.size() olaysız günde NaN üretir)
+    ]
     f[count_cols] = f[count_cols].fillna(0)
     # kümeler + kanıt (olay kimlikleri) + imkânsız seyahat: numpy döngüsü (varlık-gün başına ~15 olay)
     idx = g.indices

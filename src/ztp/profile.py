@@ -164,8 +164,10 @@ class ProfileEngine:
         p_mad = (hist[NUM_FEATURES] - gp[NUM_FEATURES].transform("median")).abs().groupby(hist["sid"]).median()
         p_var = gp[NUM_FEATURES].var().fillna(0)
         p_sum = gp["usb_count"].sum()
-        w6_cols = ["usb_count", "files_accessed", "bytes_out"] + (
-            ["sensitive_app_count"] if "sensitive_app_count" in hist else []
+        w6_cols = (
+            ["usb_count", "files_accessed", "bytes_out"]
+            + (["sensitive_app_count"] if "sensitive_app_count" in hist else [])
+            + (["cloud_app_count"] if "cloud_app_count" in hist else [])  # v6-D: sızıntı kanalı ayrı
         )
         w6_sum = hist[hist["day"] >= day - 6 * DAY].groupby("sid")[w6_cols].sum()
         # #1 çok ufuklu kanıt biriktirici (v3): aynı sayım ailelerinin 1/3/7/14/30 günlük toplamları. Tek olay yerine
@@ -180,6 +182,13 @@ class ProfileEngine:
         p_sens = (
             gp["sensitive_app_count"].agg(["mean", "var"]).fillna(0)
             if "sensitive_app_count" in hist
+            else pd.DataFrame(columns=["mean", "var"])
+        )
+        # v6-D: sızıntı kanalının KENDİ baz çizgisi. Havuzlanmış `p_sens` ile aynı kalıp, ayrı sayaç —
+        # iş araması yoğun bir kullanıcının bulut yüklemesi kendi tarama tabanına gömülmesin.
+        p_bulut = (
+            gp["cloud_app_count"].agg(["mean", "var"]).fillna(0)
+            if "cloud_app_count" in hist
             else pd.DataFrame(columns=["mean", "var"])
         )
         peer_foreign_rate = hist.groupby("peer")["foreign_device_flag"].mean().to_dict()
@@ -236,6 +245,7 @@ class ProfileEngine:
         ctx.w6_sum = w6_sum
         ctx.acc_sums = acc_sums
         ctx.p_sens = p_sens
+        ctx.p_bulut = p_bulut
         ctx.peer_foreign_rate = peer_foreign_rate
         return ctx
 
@@ -490,6 +500,21 @@ class ProfileEngine:
         s["hassas_7g_p"] = negbin_sf(sens7, 7 * max(mu_s, 0.1), 7 * var_s) if (sens7 > 0 and profil_gun >= 30) else 1.0
         if sens7 > 0:
             ex["hassas_7g"] = f"{sens7} (beklenen ~{7 * max(mu_s, 0.1):.1f})"
+        # v6-D: SIZINTI KANALI ayrı sayaç, ayrı baz çizgisi. Yukarıdaki havuzlanmış sayaç iş aramayı,
+        # saldırı araçlarını ve bulut kanallarını birlikte topluyor; iş araması yoğun bir kullanıcıda
+        # gerçek yükleme kendi tarama tabanına gömülüyordu (r6.2 S5: havuz 11,99/gün, bulut 0,098/gün).
+        k_bulut = int(row.get("cloud_app_count", 0) or 0)
+        bulut7 = k_bulut + (int(prev6["cloud_app_count"]) if prev6 is not None and "cloud_app_count" in prev6 else 0)
+        bulut_taban = getattr(ctx, "p_bulut", None)
+        var_bulut = bulut_taban is not None and sid in bulut_taban.index
+        mu_b = float(bulut_taban.loc[sid, "mean"]) if var_bulut else 0.0
+        var_b = float(bulut_taban.loc[sid, "var"]) if var_bulut else 0.0
+        s["bulut_7g_toplam"] = bulut7
+        # Taban zemini 0,02 (havuzlanmış sayaçta 0,1): sızıntı kanalı doğası gereği seyrektir, yüksek bir
+        # zemin her şeyi "beklenen" gösterir. 0,02/gün ≈ 7 haftada bir olay — bundan seyrek bir taban anlamsız.
+        s["bulut_7g_p"] = negbin_sf(bulut7, 7 * max(mu_b, 0.02), 7 * var_b) if (bulut7 > 0 and profil_gun >= 30) else 1.0
+        if bulut7 > 0:
+            ex["bulut_7g"] = f"{bulut7} sızıntı kanalı olayı (beklenen ~{7 * max(mu_b, 0.02):.2f})"
         s["jaccard_uygulama"] = jaccard(set(apps_today), set(p_apps))
         if new_both or new_sens:
             ex["yeni_uygulamalar"] = sorted(new_both | new_sens)

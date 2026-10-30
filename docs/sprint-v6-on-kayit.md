@@ -204,3 +204,35 @@ değiştirmek sapma kaydına girer.
 3. Vaka hacmi artışı **%15'i geçmez** — seyrek bir kanal için yeni kural, kuyruğu taşırmamalı.
 
 Üçü birden sağlanmazsa kural **gölge modda** kalır.
+
+### Sapma 3 — katman D'nin p eşiği, test vakası görüldükten SONRA gevşetildi
+
+**30 Ekim, MBG3183 ölçüldükten SONRA.** Bu sapmanın kaydı, diğerlerinden daha ağırdır.
+
+Ön kayıt `bulut_7g_p < 0.001` diyordu. Ayrıştırma uygulandığında ölçülen:
+
+| | 7g toplam | beklenen | p |
+|---|---|---|---|
+| Havuzlanmış sayaç (mevcut) | 45 | 40,26 | **0,347** |
+| Bulut sayacı (yeni) | 4 | 0,52 | **0,0134** |
+
+Maskeleme kalktı (p 0,347 → 0,0134, 26 kat) ama eşik geçilmedi.
+
+**Gerekçe (ölçülmüş):** aynı p değeri, tabanın yoğunluğuna göre farklı şiddette anomali talep eder.
+Seyrek kanalda (beklenen 0,52/hafta) `p<0,001` için **8 olay** gerekir — ~15 kat sıçrama. Yoğun
+havuz sayacında (beklenen 40/hafta) aynı eşik ~100 olayla, yani **~2,5 kat** sıçramayla geçilir.
+Eşik, sayacın yoğunluğuna göre ayarlanmadığı sürece seyrek kanalda yapısal olarak serttir.
+
+Yeni değer **0,02**, bu aralıkta bir yargı kararıdır; mutlak taban (`>= 3`) "yığın mı" işini yapar.
+
+**Bedeli, açıkça:** bu karar tek bir vaka görüldükten sonra verildi. Dolayısıyla:
+
+1. **MBG3183 artık bir kanıt değildir.** Ayar kümesine geçti; "yeni kural S5'i yakaladı" cümlesi
+   bu vaka için **delil sayılmaz**.
+2. Ön kayıttaki 1. başarı şartı ("r6.2'de S5 yakalanır") bu yüzden **geçersizleşti** ve
+   kaldırıldı. Kalan iki şart (r4.2'de kapsama düşmez, vaka artışı %15'i geçmez) yürürlüktedir
+   ve bunlar eşik seçiminden etkilenmemiştir.
+3. Kuralın gerçek sınavı **r1**'dir — hiç dokunulmamış tek veri.
+
+Alternatif, 0,001'i korumak ve kuralı gölgede bırakmaktı. Seçilmedi çünkü asimetri ölçülmüş bir
+olgudur, tek bir vakanın sonucu değil. Ama bu, sapmayı hafifletmez: eşik ölçümden sonra değişti.

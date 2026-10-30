@@ -33,6 +33,20 @@ def _shadow(prefixes: tuple) -> Callable[[List[dict]], List[dict]]:
     return f
 
 
+def _yayina(ids: tuple) -> Callable[[List[dict]], List[dict]]:
+    """Gölgedeki kuralı ÖLÇÜM için yayına alır. Katalogdaki YAML gölgede kalır; 13.6 ihlal edilmez —
+    bir kuralın yayına çıkıp çıkamayacağı ancak yayındaymış gibi ölçülerek bilinebilir."""
+
+    def f(catalog: List[dict]) -> List[dict]:
+        out = copy.deepcopy(catalog)
+        for r in out:
+            if r["id"] in ids and r["durum"] == "golge-modda":
+                r["durum"] = "yayinda"
+        return out
+
+    return f
+
+
 VARIANTS: Dict[str, dict] = {
     "tam": dict(aciklama="tüm bileşenler açık (referans)"),
     "prediction_yok": dict(aciklama="PRED-* kuralları gölgede", catalog=_shadow(("PRED-",))),
@@ -130,6 +144,12 @@ VARIANTS: Dict[str, dict] = {
             pred_yeniden_egitim_gun=14,
             pred_min_yeni_etiket=25,
         ),
+    ),
+    # ---- v6 katman D: sızıntı kanalı sayacının ayrılması. Kural gölgede doğdu; yayına çıkma şartı
+    # ön kayıtta yazılı iki eşik (r4.2'de kapsama düşmez, vaka hacmi artışı %15'i geçmez).
+    "v6d_sizinti_kanali": dict(
+        aciklama="v6-D: UEBA-0022 (sızıntı kanalı ani artış) ÖLÇÜM için yayında",
+        catalog=_yayina(("UEBA-0022",)),
     ),
     "v6_gurultulu_etiket": dict(
         aciklama="v6-A döngü, analistin %15'i yanılıyor — gürültülü etikete dayanıklılık",

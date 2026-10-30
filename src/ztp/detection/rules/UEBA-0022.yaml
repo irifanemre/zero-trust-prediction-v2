@@ -1,0 +1,73 @@
+id: UEBA-0022
+ad: Sızıntı kanalı kullanımında ani artış
+surum: '1.0'
+durum: golge-modda
+katman: UEBA
+attack:
+- T1567
+fp_riski: orta
+veri_kaynaklari:
+- proxy
+mantik:
+  pencere: 1d
+  kosullar:
+  - bulut_7g_toplam >= 3
+  - bulut_7g_p < 0.02
+siddet:
+  sinyal: bulut_7g_p
+  esik: 0.05
+  olcek: 2.0
+  donusum: log10
+agirlik: 6
+bastirma:
+- servis_hesaplari
+sahip: guvenlik-operasyon
+runbook: RB-UEBA-0022
+rapor_sinyalleri:
+- bulut_7g_toplam
+- bulut_7g_p
+kanit: []
+test_senaryolari:
+- ad: seyrek_kullanicida_ani_yukleme
+  beklenen: true
+  sinyaller:
+    bulut_7g_toplam: 4
+    bulut_7g_p: 0.0000031
+- ad: esik_alti_tek_olay
+  beklenen: false
+  sinyaller:
+    bulut_7g_toplam: 2
+    bulut_7g_p: 0.0000031
+- ad: aliskin_kullanicida_normal_hafta
+  beklenen: false
+  sinyaller:
+    bulut_7g_toplam: 12
+    bulut_7g_p: 0.4
+notlar: |
+  v6-D. UEBA-0021 ile AYNI kalıp, farklı sayaç: o "hassas kategori" (iş arama + saldırı aracı +
+  bulut) havuzunu sayar, bu yalnız SIZINTI KANALINI (CLOUD_APPS: cloud_storage, file_transfer,
+  paste_site, personal_cloud, webdav).
+
+  Gerekçe ölçümle çıktı (docs/sprint-v6-on-kayit.md, katman D). CERT r6.2'de kaçırılan tek USB'siz
+  sızdırma senaryosu (S5-MBG3183) incelendiğinde: kullanıcı 57 saniyede Dropbox'a dört dosya
+  yükledi, hiçbir kural tetiklenmedi. Havuzlanmış tabanı 11,99 olay/gün (çoğu iş araması), bulut
+  tabanı 0,098/gün. Olay günündeki 4 bulut olayı, havuzda günlük 12'nin içinde görünmez kaldı.
+
+  İddia: NİYET sinyali (iş arama) YÖNTEM sinyalini (bulut yükleme) maskeliyor. İki kategori farklı
+  şeyi ölçer ve aynı baz çizgisini paylaşmamalıdır.
+
+  Eşik seçimi: `>= 3`, UEBA-0021'in `>= 5`'inden düşük çünkü sızıntı kanalı doğası gereği seyrektir;
+  üç olay seyrek bir kanalda anlamlı bir yığındır ve tek bir kazara tıklamanın üstündedir.
+
+  p eşiği 0,02 — UEBA-0021'in 0,001'inden GEVŞEK, ve bu bilinçli (bkz. sapma 3). Aynı p değeri,
+  tabanın yoğunluğuna göre tamamen farklı bir anomali şiddeti talep eder: yoğun havuz sayacında
+  (beklenen ~40/hafta) p<0,001 yaklaşık 2,5 kat sıçrama isterken, seyrek bir kanalda (beklenen
+  ~0,5/hafta) 8 olay yani ~15 kat sıçrama ister. Mutlak taban (`>= 3`) "bu bir yığın mı" işini
+  yapar; p değeri "bu kullanıcı için olağandışı mı" işini yapar ve seyrek sayaçta gevşek olmalıdır.
+  Ağırlık 6: UEBA-0021'in 4'ünden yüksek (kanal kullanımı niyetten daha doğrudan kanıttır),
+  UEBA-0003'ün 8'inden düşük (hacim bilgisi yok, yalnız olay sayısı var).
+
+  GÖLGE MODDA doğdu: 13.6 gereği yeni kural doğrudan yayına girmez. Ön kayıttaki üç şarttan biri
+  ("r6.2'de S5 yakalanır") SAPMA 3 ile geçersizleşti: p eşiği o vaka görüldükten sonra gevşetildiği
+  için MBG3183 artık kanıt değil, ayar kümesinin parçasıdır. Yürürlükteki iki şart: r4.2'de kapsama
+  düşmez ve vaka hacmi artışı %15'i geçmez. Kuralın yansız sınavı r1'dir.
