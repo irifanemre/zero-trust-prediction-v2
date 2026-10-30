@@ -149,6 +149,13 @@ class TenantConfig:
     saldiri_yolu_baglam: int = 2  # n-gram bağlam uzunluğu; transformer'da pencere
     saldiri_yolu_agirligi: float = 0.0  # 0 → skora girmez. Açılması ablasyona bağlıdır (14.5)
 
+    # --- v6 katman C: öğrenen graf gömme ([ml] eklentisi). Kendi kendine denetimli bağlantı tahmini;
+    # etiket GEREKTİRMEZ. Ön kayıt eşiği 27/34 — basit graf çarpanının tek başına verdiği sonuç.
+    graf_ogrenen_enabled: bool = False
+    graf_ogrenen_boyut: int = 32
+    graf_ogrenen_egitim_gun: int = 14  # kaç günde bir yeniden eğitilir (geçmiş pencereyle)
+    graf_ogrenen_agirligi: float = 0.0  # raw += agirlik · sasirticilik · 10. 0 → skora girmez
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")
@@ -225,6 +232,14 @@ class TenantConfig:
             raise ValueError("saldiri_yolu_agirligi [0, 5] aralığında olmalı")
         if self.saldiri_yolu_agirligi and not self.saldiri_yolu_enabled:
             raise ValueError("saldiri_yolu_agirligi > 0 için saldiri_yolu_enabled açık olmalı")
+        if self.graf_ogrenen_boyut < 4:
+            raise ValueError("graf_ogrenen_boyut ≥ 4 olmalı")
+        if self.graf_ogrenen_egitim_gun < 1:
+            raise ValueError("graf_ogrenen_egitim_gun ≥ 1 olmalı")
+        if self.graf_ogrenen_agirligi < 0 or self.graf_ogrenen_agirligi > 5:
+            raise ValueError("graf_ogrenen_agirligi [0, 5] aralığında olmalı")
+        if self.graf_ogrenen_agirligi and not self.graf_ogrenen_enabled:
+            raise ValueError("graf_ogrenen_agirligi > 0 için graf_ogrenen_enabled açık olmalı")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

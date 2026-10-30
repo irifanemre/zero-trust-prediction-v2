@@ -25,7 +25,7 @@ from ztp.features import extract_device_day, extract_features
 from ztp.feedback import LabelStore
 from ztp.gnn.bayesian_gate import BayesKapisi
 from ztp.gnn.conformal_eval import VA_MIN, VennAbersKalibrator
-from ztp.gnn.temporal_graph import TemporalHeteroGraph
+from ztp.gnn.temporal_graph import KENAR_SEMASI, TemporalHeteroGraph
 from ztp.gnn.tgn_model import TemporalGraphBaseline
 from ztp.graph.analysis import DeepGraphAnalyzer, GraphFindings
 from ztp.graph.knowledge import KnowledgeGraph
@@ -171,6 +171,7 @@ class ZeroTrustPredictionPipeline:
             if self.cfg.saldiri_yolu_enabled
             else None
         )
+        self.graf_ogrenen = self._graf_ogrenen_kur() if self.cfg.graf_ogrenen_enabled else None
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
 
     def _ingest(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -482,6 +483,14 @@ class ZeroTrustPredictionPipeline:
                     if a.skor > 0 and (ac := a.aciklama()):
                         explains[sid]["anomali_skoru"] = ac
             self.health.time("anomali_kanali", an0)
+        # v6-C (literatür §4.3): öğrenen graf gömmesi. Kendi kendine denetimli — etiket GEREKTİRMEZ.
+        # `gun()` içinde önce skorlar, sonra bugünün kenarlarını geçmişe ekler: sızıntı bariyeri orada.
+        if self.graf_ogrenen is not None:
+            go0 = time.perf_counter()
+            hedefler = {s: h for s, h in self._gunun_hedefleri(ev_day).items() if s in signals}
+            for sid, skor in self.graf_ogrenen.gun(day, hedefler).items():
+                signals[sid]["graf_ogrenen_sasirticilik"] = skor
+            self.health.time("graf_ogrenen", go0)
         for sid in signals:
             self.scorer.add_hits(sid, hits_today[sid])
             prov = self.scorer.compute(sid, day, signals[sid])
@@ -567,6 +576,33 @@ class ZeroTrustPredictionPipeline:
             sum(1 for s in queue if results[s].critical),
             [k for k, v in dq.items() if v["durum"] == "askida"],
         )
+
+    # ------------------------------------------------------------------
+    def _graf_ogrenen_kur(self):
+        """v6-C: öğrenen graf. torch yoksa AÇIK hata — sessizce elle yazılmış istatistiklere düşmez."""
+        from ztp.gnn.learned import GrafGommeModeli, TemporalGrafOgrenen
+
+        return TemporalGrafOgrenen(
+            GrafGommeModeli(boyut=self.cfg.graf_ogrenen_boyut),
+            egitim_periyodu_gun=self.cfg.graf_ogrenen_egitim_gun,
+            gecmis_gun=self.cfg.graf_gecmis_gun,
+        )
+
+    @staticmethod
+    def _gunun_hedefleri(ev_day: pd.DataFrame) -> Dict[str, List[str]]:
+        """Günün olaylarından {kullanıcı: dokunduğu hedefler}. Hedef TÜRÜYLE birlikte adlandırılır:
+        `cihaz:PC-1` ile `kaynak:PC-1` aynı düğüm değildir."""
+        out: Dict[str, List[str]] = {}
+        if ev_day is None or not len(ev_day):
+            return out
+        ev = ev_day[ev_day["canonical"].notna()]
+        for kolon, tur, _ in KENAR_SEMASI:
+            if kolon not in ev.columns:
+                continue
+            alt = ev[ev[kolon].notna()]
+            for sid, deger in zip(alt["canonical"].astype(str).to_numpy(), alt[kolon].astype(str).to_numpy()):
+                out.setdefault(sid, []).append(f"{tur}:{deger}")
+        return {k: sorted(set(v)) for k, v in out.items()}
 
     # ------------------------------------------------------------------
     def _belirsizlik(self, yuzdelik: float):

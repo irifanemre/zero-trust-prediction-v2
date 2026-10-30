@@ -93,7 +93,9 @@ class TransformerModeli:
             devir,
             ogrenme_hizi,
         )
-        self.cihaz = cihaz or ("mps" if torch.backends.mps.is_available() else "cpu")
+        # CPU varsayılan — determinizm için (bkz. `gnn/learned.py`: MPS'te kayan nokta toplama sırası
+        # sabit değil ve ağırlık özeti değişiyor). `cihaz="mps"` açıkça seçilir ve rapora yazılır.
+        self.cihaz = cihaz or "cpu"
         self._diziler: Dict[int, List[str]] = {}
         self._aktif: List[str] = []
         self._sozluk: List[str] = [PAD, BASLA]

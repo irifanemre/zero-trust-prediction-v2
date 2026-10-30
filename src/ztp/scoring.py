@@ -108,6 +108,13 @@ class RiskScorer:
             add = float(self.cfg.anomali_agirligi) * anomali * 10.0
             raw += add
             contrib["ANOMALI-DENETIMSIZ"] = add
+        # v6-C: öğrenen graf gömmesinin "şaşırtıcılık" skoru. Toplamsal, çünkü aynı yapısal gerekçe:
+        # kural tetiklemeyen kullanıcıya ulaşabilmesi gerekiyor (bkz. r6.2 ölçümü).
+        ogrenen = float(signals.get("graf_ogrenen_sasirticilik", 0.0) or 0.0)
+        if self.cfg.graf_ogrenen_agirligi > 0 and ogrenen > 0:
+            add = float(self.cfg.graf_ogrenen_agirligi) * ogrenen * 10.0
+            raw += add
+            contrib["GRAF-OGRENEN"] = add
         return RiskResult(sid, raw, base, mult, 0.0, window, contrib, anomali=anomali)
 
     def calibrate(self, day: pd.Timestamp, results: Dict[str, RiskResult]) -> None:
