@@ -142,6 +142,13 @@ class TenantConfig:
     pred_yeniden_egitim_gun: int = 0  # 0 → kapalı. Kaç günde bir model yeniden eğitilir
     pred_min_yeni_etiket: int = 25  # son eğitimden beri bu kadar yeni etiket yoksa eğitilmez
 
+    # --- v6 katman B: saldırı yolu tahmini. Çıktı ilk sürümde SKORA GİRMEZ (agirlik 0) — yalnız vaka
+    # anlatısına gider ve kanıt doğrulayıcıdan geçer, böylece yanlış tahmin precision'ı bozamaz.
+    saldiri_yolu_enabled: bool = False
+    saldiri_yolu_model: str = "ngram"  # ngram (sayım, deterministik) | transformer ([ml] eklentisi gerekir)
+    saldiri_yolu_baglam: int = 2  # n-gram bağlam uzunluğu; transformer'da pencere
+    saldiri_yolu_agirligi: float = 0.0  # 0 → skora girmez. Açılması ablasyona bağlıdır (14.5)
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")
@@ -210,6 +217,14 @@ class TenantConfig:
             raise ValueError("pred_min_yeni_etiket ≥ 1 olmalı")
         if self.pred_yeniden_egitim_gun and not self.geri_bildirim_dongusu:
             raise ValueError("pred_yeniden_egitim_gun > 0 için geri_bildirim_dongusu açık olmalı (etiket gelmeden eğitilemez)")
+        if self.saldiri_yolu_model not in ("ngram", "transformer"):
+            raise ValueError("saldiri_yolu_model: ngram | transformer")
+        if self.saldiri_yolu_baglam < 1:
+            raise ValueError("saldiri_yolu_baglam ≥ 1 olmalı")
+        if self.saldiri_yolu_agirligi < 0 or self.saldiri_yolu_agirligi > 5:
+            raise ValueError("saldiri_yolu_agirligi [0, 5] aralığında olmalı")
+        if self.saldiri_yolu_agirligi and not self.saldiri_yolu_enabled:
+            raise ValueError("saldiri_yolu_agirligi > 0 için saldiri_yolu_enabled açık olmalı")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

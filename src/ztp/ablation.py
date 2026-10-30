@@ -107,6 +107,41 @@ VARIANTS: Dict[str, dict] = {
         aciklama="lojistik modelde dengeleme: sıralama ↔ kalibrasyon takası (AUPRC ile Brier birlikte okunur)",
         cfg=dict(pred_sinif_agirligi=True),
     ),
+    # ---- v6 katman A: geri bildirim döngüsü. Ön kayıt eşiği (`docs/sprint-v6-on-kayit.md`):
+    # Bayes kapısı sıfırdan farklı eleme yapar VE precision@N düşmeden vaka hacmi ≥%10 azalır.
+    "v6_geri_bildirim": dict(
+        aciklama="v6-A döngü: analist etiketi → Bayes kapısı + Venn-Abers + periyodik yeniden eğitim",
+        cfg=dict(
+            geri_bildirim_dongusu=True,
+            analist_gecikme_gun=2,
+            bayes_kapi_esigi=0.3,
+            bayes_min_gozlem=10,
+            belirsizlik_enabled=True,
+            pred_yeniden_egitim_gun=14,
+            pred_min_yeni_etiket=25,
+        ),
+    ),
+    "v6_geri_bildirim_kapisiz": dict(
+        aciklama="v6-A döngü ama Bayes kapısı KAPALI — etkinin kapıdan mı başka yerden mi geldiğini ayırır",
+        cfg=dict(
+            geri_bildirim_dongusu=True,
+            analist_gecikme_gun=2,
+            belirsizlik_enabled=True,
+            pred_yeniden_egitim_gun=14,
+            pred_min_yeni_etiket=25,
+        ),
+    ),
+    "v6_gurultulu_etiket": dict(
+        aciklama="v6-A döngü, analistin %15'i yanılıyor — gürültülü etikete dayanıklılık",
+        cfg=dict(
+            geri_bildirim_dongusu=True,
+            analist_gecikme_gun=2,
+            analist_hata_orani=0.15,
+            bayes_kapi_esigi=0.3,
+            bayes_min_gozlem=10,
+            belirsizlik_enabled=True,
+        ),
+    ),
 }
 # Varlık katmanlandırma (#4) ablasyona ayrı eklenir: kalıplar müşteriye özgüdür, CERT'te varlık envanteri yoktur.
 # Kullanımı: run_ablation(..., variants={**VARIANTS, "varlik_katmani": varlik_varyanti(tier0=[...], tier1=[...])}).

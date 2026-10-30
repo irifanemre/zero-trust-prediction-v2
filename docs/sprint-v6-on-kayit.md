@@ -61,7 +61,7 @@ yazılır. Eşiği koşudan sonra gevşetmek sapmadır ve sapma kaydına girer.
 |---|---|---|
 | **A** | Bayes kapısı sıfırdan farklı eleme yapar **ve** precision@N düşmeden vaka hacmi azalır | Döngünün amacı gürültüyü kesmek; yakalama artışı beklenmiyor |
 | **A (model)** | Periyodik eğitilen modelin AUPRC'si tek seferlik eğitilenden yüksek | Sürekli kalibrasyonun iddiası bu |
-| **B** | Sonraki adım top-3 doğruluğu, taktik taban oranının **en az 2 katı** | Taban oranı kadar tahmin = bilgi yok |
+| **B** | Sonraki adım **top-1** doğruluğu, en sık taktiğin oranının **en az 2 katı** (↓ sapma 1) | Taban oranı kadar tahmin = bilgi yok |
 | **B (transformer)** | n-gram tabanını geçmeli | Aksi hâlde ağır model gereksiz |
 | **C** | **27/34** — graf çarpanının tek başına verdiği sonuç | 22'yi geçmek başarı değildir: mevcut basit çözüm zaten 27 veriyor |
 
@@ -102,3 +102,20 @@ Koşudan sonra tutup tutmadıkları tek tek işaretlenecek. Tutmayanlar sonucun 
 
 Beklenti 3, 4 ve 5 bilinçli olarak **karamsar** yazıldı: tutmazlarsa katmanlar gerçekten değer üretmiş
 olur ve bu, ön kayıtla kanıtlanmış bir sonuç olur.
+
+## Sapma kaydı
+
+Ön kayıt değiştirilmez; değiştirilmesi gereken yer buraya yazılır. Her sapma: ne, ne zaman, neden ve
+**gerçek veri görülmeden önce mi sonra mı** olduğu.
+
+### Sapma 1 — B'nin eşiği top-3'ten top-1'e çevrildi
+
+**30 Ekim, gerçek veri ölçülmeden ÖNCE.** Ön kayıt "top-3 doğruluğu, taban oranının en az 2 katı"
+diyordu. Modül yazılıp oyuncak veriyle sınandığında bunun **matematiksel olarak ulaşılamaz** olduğu
+görüldü: kural kataloğunda 12 teknik, 9 taktik var ve taktik dağılımı çarpık. Top-3 taban oranı zaten
+0,87 civarında çıkıyor; "2 katı" = 1,74 > 1, yani hiçbir model geçemez.
+
+Top-1 tabanı (en sık tek taktiğin oranı) çok daha düşüktür ve modele gerçek bir sınav olur. Eşik
+`top1 ≥ 2 × en_sik_taktik_orani` olarak düzeltildi. Top-3 yine **raporlanır**, ama başarı ölçütü değildir.
+
+Bu sapma gerçek veri görülmeden yapıldı; r4.2 ya da r6.2'den hiçbir sonuç bu karara girmedi.

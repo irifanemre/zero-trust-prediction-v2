@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ztp.analyst_loop import AnalistSimulatoru, KalibrasyonZamanlayicisi, bayes_besle, belirsizlik_sirasi
+from ztp.attack_path import SaldiriYoluTahmincisi, ilerleme, model_kur, taktik_dizisi
 from ztp.config import TenantConfig
 from ztp.data.dataset import Dataset
 from ztp.deception import UNATTRIBUTED_COLUMNS, HoneytokenRegistry
@@ -158,6 +159,18 @@ class ZeroTrustPredictionPipeline:
         self.bayes_ogrenilen = 0
         self._va: Optional[VennAbersKalibrator] = None
         self._va_etiket_n = 0
+        # v6 katman B: saldırı yolu tahmini. Kapalıyken kurulmaz; transformer seçiliyse torch yoksa
+        # burada AÇIK hata verir — sessizce n-gram'a düşmez (hangi model koştuğu kayıttan okunmalı).
+        self.yol = (
+            SaldiriYoluTahmincisi(
+                model_kur(
+                    self.cfg.saldiri_yolu_model,
+                    **({"en_uzun_baglam": self.cfg.saldiri_yolu_baglam} if self.cfg.saldiri_yolu_model == "ngram" else {}),
+                )
+            )
+            if self.cfg.saldiri_yolu_enabled
+            else None
+        )
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
 
     def _ingest(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -543,6 +556,8 @@ class ZeroTrustPredictionPipeline:
             for c in cases_today:
                 sink.emit({k: v for k, v in c.items() if k not in ("_sid", "rapor")})
         self._geri_bildirim(day, cases_today)
+        if self.yol is not None:  # v6-B: gün bitti → bugünün geçişleri ancak ŞİMDİ modele öğretilir
+            self.yol.ogren_gun(day, {s: [t for _, t in taktik_dizisi(hits_today[s], self.kg)] for s in sorted(signals)})
         LOG.info(
             "%s: aktif=%d tespitli=%d kuyruk=%d kritik=%d askıda_kaynak=%s",
             day.date(),
@@ -737,6 +752,13 @@ class ZeroTrustPredictionPipeline:
         # Aralık yalnız vakaya bilgi ekler; skora ve sıraya girmez (aktif öğrenme sırasını belirler).
         if (aralik := self._belirsizlik(r.percentile)) is not None:
             case["belirsizlik"] = aralik.ozet()
+        # v6-B: sıradaki hamle. TAHMİN önce, ÖĞRENME gün sonunda (`_run_day`) — sıra sızıntı bariyeridir:
+        # bu tahmin, bu kullanıcının bugünkü davranışını modele öğretmeden ÖNCE üretilir.
+        if self.yol is not None:
+            bugun = [t for _, t in taktik_dizisi([h for h in r.hits if h.day == day], self.kg)]
+            tahmin = self.yol.tahmin_et(sid, bugun)
+            if tahmin.yeterli:
+                case["saldiri_yolu"] = dict(**tahmin.ozet(), kill_chain_ilerlemesi=ilerleme([*tahmin.gecmis, *bugun]))
         if self.llm.kb:
             case["attack_baglami"] = [
                 dict(teknik=p.technique, ad=p.name, taktik=p.tactic, ozet=p.summary, onlem=p.mitigations, kaynak=p.source)
