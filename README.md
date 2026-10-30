@@ -378,6 +378,40 @@ tuttu, ama kapsama kaybını saymıyordu. Sapma kaydına yazıldı.
 Ayrıntı: [`docs/v6a-geri-bildirim-olcumu.md`](docs/v6a-geri-bildirim-olcumu.md) ·
 ön kayıt [`docs/sprint-v6-on-kayit.md`](docs/sprint-v6-on-kayit.md).
 
+### v6-D: sızıntı kanalı sayacının ayrılması (r4.2)
+
+Bir teşhisten doğdu. r6.2'de kaçırılan tek **USB'siz** sızdırma senaryosu (S5) açıldı: kullanıcı 57 saniyede
+Dropbox'a dört dosya yükledi, hiçbir kural tetiklenmedi. İki yapısal sebep çıktı:
+
+1. **`UEBA-0003` r6.2'de yapısal olarak ölü.** r6.2'nin `http.csv` dosyasında `content` kolonu **yoktur**,
+   dolayısıyla web olaylarında `bytes_out = 0`. En ağır UEBA kurallarından biri o koşuda hiç tetiklenemez.
+   Eşik sorunu değil, veri yokluğu — r6.2 sonuçları okunurken bilinmesi gereken bir sınır.
+2. **Niyet sinyali yöntem sinyalini maskeliyordu.** `sensitive_app_count` beş sızıntı kanalını iş arama ve
+   saldırı araçlarıyla **aynı sayaçta** topluyordu.
+
+| | 7g toplam | beklenen | p |
+|---|---|---|---|
+| Havuzlanmış sayaç | 45 | 40,26 | **0,347** — hiç anormal değil |
+| Ayrılmış bulut sayacı | 4 | 0,52 | **0,0134** |
+
+İş aramayı yoğun yapan kullanıcının gerçek yüklemesi kendi tarama tabanına gömülüyordu. Ayırma **26 kat**
+anlamlılık kazandırdı. Eklenen: `cloud_app_count` özelliği, `bulut_7g_*` sinyalleri, **`UEBA-0022`** kuralı.
+
+**Ölçüm (r4.2):** kapsama 22/34 → **22/34** (değişmedi), vaka 1.939 → 1.960 (**+%1,08**), değişen senaryo **0**.
+Kural 143 kez tetiklendi, precision'ı **%15,8** — sistem ortalamasının (%4,7) **3,4 katı**.
+
+**Karar: kural GÖLGEDE kalıyor.** Sprintin iki güvenlik şartı geçti ama projenin kendi gölge-mod mezuniyet
+standardı (13.6: precision ≥ %25) geçilmedi — 0,158 < 0,25. Daha katı olan standart geçerlidir.
+
+**r4.2 bu kuralın faydasını ölçemez:** senaryolarının 31/34'ü USB'ye bağımlı ve r4.2'de `content` kolonu
+var, yani bu kuralın doldurduğu boşluk orada mevcut değil. Yansız sınav **r1**'dir.
+
+**Sapma 3 (ağır):** p eşiği `0,001 → 0,02`, test vakası **görüldükten sonra** değiştirildi. Gerekçe ölçülmüş
+(seyrek sayaçta 0,001 için 8 olay / 15× sıçrama gerekirken yoğun sayaçta ~2,5× yetiyor) ama bedeli kaydedildi:
+o vaka artık kanıt değil, ayar kümesinin parçası.
+
+Ayrıntı: [`docs/v6d-sizinti-kanali-olcumu.md`](docs/v6d-sizinti-kanali-olcumu.md).
+
 ## Lisans
 
 Apache-2.0 — bkz. [LICENSE](LICENSE).
