@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -194,6 +194,69 @@ class MetricsCollector:
             out[f"recall@{k}_kullanici"] = round(len(yakalanan_kullanici) / len(olculebilir), 3) if olculebilir else None
         out["recall_paydasi"] = dict(insider_gun=toplam_firsat, insider_kullanici=len(olculebilir))
         return out
+
+    def butce_recall_egrisi(self, butceler: Sequence[int] = (1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100)) -> Optional[dict]:
+        """Recall'ı TEK SAYI yerine EĞRİ olarak verir: bütçe 1'den 100'e çıkarken insider'ların kaçı görülüyor?
+
+        Neden gerekiyor: "recall@30 = 0,765" cümlesi tek başına yanıltıcıdır, çünkü bütçeyi 30'dan 100'e çıkarınca
+        ne kazanıldığını söylemez. Eğri iki soruyu birden cevaplar: (1) doygunluk nerede — hangi bütçeden sonra
+        artış durur; (2) marjinal maliyet ne — bir insider daha görmek için kaç ek vaka incelenir.
+
+        Literatürle karşılaştırılabilir olması bu biçime bağlı: denetimsiz topluluk çalışması (TNSM 2021) sonucunu
+        "%0,1 soruşturma bütçesinde insider'ların %60'ı" diye verir, yani bütçe oranına göre. `butce_orani`
+        kolonu aynı eksendir: bütçe / aktif kullanıcı sayısı.
+
+        Eğri kuyruğun GERÇEK sırasını kullanır; bütçe o günkü kuyruk uzunluğunu aşarsa kuyruk neyse o alınır
+        (yapay şişirme yok). Dolayısıyla büyük bütçelerde eğri düzleşirse bu, sıranın değil kuyruğun sınırıdır.
+        """
+        if not self.gt or not self.queue_by_day:
+            return None
+        windows = defaultdict(list)
+        for g in self.gt:
+            if not g.get("negatif"):
+                windows[g["sid"]].append(self._window(g))
+        if not windows:
+            return None
+        gunler = sorted(self.queue_by_day)
+        firsat = {sid: [d for d in gunler if any(a <= d <= b for a, b in ar)] for sid, ar in windows.items()}
+        toplam_firsat = sum(len(v) for v in firsat.values())
+        olculebilir = [sid for sid, v in firsat.items() if v]
+        if not olculebilir:
+            return None
+        aktif = float(np.mean([d["aktif_kullanici"] for d in self.daily])) if self.daily else 0.0
+        satirlar = []
+        for k in sorted(set(int(b) for b in butceler if int(b) >= 1)):
+            gun_sayisi = 0
+            kullanicilar = set()
+            incelenen = 0
+            for d in gunler:
+                ilk_k = self.queue_by_day[d][:k]
+                incelenen += len(ilk_k)
+                for sid in firsat:
+                    if d in firsat[sid] and sid in ilk_k:
+                        gun_sayisi += 1
+                        kullanicilar.add(sid)
+            satirlar.append(
+                dict(
+                    butce=k,
+                    butce_orani=round(k / aktif, 5) if aktif else None,
+                    incelenen_vaka=incelenen,
+                    recall_gun=round(gun_sayisi / toplam_firsat, 3) if toplam_firsat else None,
+                    recall_kullanici=round(len(kullanicilar) / len(olculebilir), 3),
+                    yakalanan_insider=len(kullanicilar),
+                    # bir insider daha görmek için kaç ek vaka: marjinal maliyet (önceki satıra göre)
+                    vaka_basina_insider=None,
+                )
+            )
+        for onceki, simdi in zip(satirlar, satirlar[1:]):
+            d_insider = simdi["yakalanan_insider"] - onceki["yakalanan_insider"]
+            d_vaka = simdi["incelenen_vaka"] - onceki["incelenen_vaka"]
+            simdi["vaka_basina_insider"] = round(d_vaka / d_insider, 1) if d_insider > 0 else None
+        return dict(
+            payda=dict(insider_gun=toplam_firsat, insider_kullanici=len(olculebilir), ort_aktif_kullanici=round(aktif, 1)),
+            egri=satirlar,
+            not_="Bütçe o günkü kuyruk uzunluğunu aşarsa kuyruk neyse o alınır; düzleşme sıranın değil kuyruğun sınırı olabilir.",
+        )
 
     def coverage(self) -> List[dict]:
         """19.6 Saldırı simülasyonu kaydı: teknik, kaynak, beklenen tespit, gerçek sonuç, erkenlik, sonuç."""
@@ -396,6 +459,7 @@ class MetricsCollector:
             ),
             precision_at_n=labels.metrics(),
             etiketli_veri_precision=self.labeled_precision(),
+            butce_recall_egrisi=self.butce_recall_egrisi(),
             kural_sagligi=dict(
                 tetiklenme=dict(self.rule_hits),
                 gun30_tetiklenmeyen=stale,

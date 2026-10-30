@@ -115,6 +115,24 @@ class TenantConfig:
     kanit_dogrulama: str = "kapali"  # kapali | dengeli | siki — LLM özetinde referanssız cümleler (§7.2)
     cok_ajanli_rapor: bool = False  # Investigator/Verifier/Reporter zinciri (§7.3)
 
+    # --- v5: r6.2 ölçümünün yapısal bulgusuna cevap (`docs/r62-v4-olcumu.md`, `docs/literatur-katman-haritasi.md`).
+    # Bulgu: graf ÇARPAN olduğu için tabanı sıfır olan kullanıcıya ulaşamaz (1,5 × 0 = 0) ve kaçan insider tam
+    # bu durumdaydı. Aşağıdaki iki yol o tavanı kaldırır; ikisi de varsayılanda KAPALI (14.5).
+    # (1) Graf riskini çarpan yerine TOPLAMSAL terim olarak ekle: raw += agirlik · graf_riski · 10
+    graf_toplamsal_agirlik: float = 0.0
+    # (2) Kurala bağlı olmayan denetimsiz anomali kanalı (literatür §1.2–1.4): ECOD / Isolation Forest
+    anomali_enabled: bool = False  # kanal sinyal üretsin mi (üretmek skoru değiştirmez)
+    anomali_tur: str = "ecod"  # ecod (parametresiz, deterministik, boyut katkılı) | orman (Isolation Forest)
+    anomali_agirligi: float = 0.0  # raw += agirlik · anomali_skoru · 10. 0 → skor değişmez
+    anomali_pencere_gun: int = 30  # uyum penceresi; skorlanan günden ÖNCE biter (sızıntı yok)
+    anomali_yenileme_gun: int = 7  # kaç günde bir yeniden uyumlanır
+    # Denetimsiz skor bu yüzdeliği aşarsa v2 doğrulama kapısında "güçlü tek sinyal" sayılır (0 = kapalı).
+    # Kapalıyken kurala bağlı olmayan bir vaka kuyruğa yalnız `kuyruk_kacis_yuzdelik` üzerinden girebilir.
+    anomali_dogrulama_esigi: float = 0.0
+    # Lojistik modelde sınıf ağırlığı: sıralama (AUPRC, recall@bütçe) ile kalibrasyon (Brier) arasında TAKAS.
+    # Varsayılan kapalı — gerekçe `prediction_model.LogisticModel.fit` içinde; ikisi birlikte raporlanır.
+    pred_sinif_agirligi: bool = False
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")
@@ -155,6 +173,24 @@ class TenantConfig:
             raise ValueError("adwin_delta (0, 1) aralığında olmalı")
         if self.kanit_dogrulama not in ("kapali", "dengeli", "siki"):
             raise ValueError("kanit_dogrulama: kapali | dengeli | siki")
+        if self.graf_toplamsal_agirlik < 0 or self.graf_toplamsal_agirlik > 5:
+            raise ValueError("graf_toplamsal_agirlik [0, 5] aralığında olmalı")
+        if self.graf_toplamsal_agirlik and not self.graf_enabled:
+            raise ValueError("graf_toplamsal_agirlik > 0 için graf_enabled açık olmalı (sinyal üretilmeden terim eklenemez)")
+        if self.anomali_tur not in ("ecod", "orman"):
+            raise ValueError("anomali_tur: ecod | orman")
+        if self.anomali_agirligi < 0 or self.anomali_agirligi > 5:
+            raise ValueError("anomali_agirligi [0, 5] aralığında olmalı")
+        if self.anomali_agirligi and not self.anomali_enabled:
+            raise ValueError("anomali_agirligi > 0 için anomali_enabled açık olmalı")
+        if not 0 <= self.anomali_dogrulama_esigi < 1:
+            raise ValueError("anomali_dogrulama_esigi [0, 1) aralığında olmalı (0 = kapalı)")
+        if self.anomali_dogrulama_esigi and not self.anomali_enabled:
+            raise ValueError("anomali_dogrulama_esigi > 0 için anomali_enabled açık olmalı")
+        if self.anomali_pencere_gun < 1 or self.anomali_pencere_gun > self.long_window_days:
+            raise ValueError("anomali_pencere_gun 1 ile uzun pencere arasında olmalı")
+        if self.anomali_yenileme_gun < 1:
+            raise ValueError("anomali_yenileme_gun ≥ 1 olmalı")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

@@ -38,6 +38,7 @@ FROZEN_CODE = (
     "quality.py",
     "scoring.py",
     "stats.py",
+    "unsupervised.py",  # v5: denetimsiz anomali kanalı skora toplamsal girer → tespit davranışını etkiler
 )
 # kural davranışını değiştirmeyen alanlar (LLM, yollar, gizli anahtar, entegrasyon) değer özetine girmez
 NON_BEHAVIOUR_FIELDS = {

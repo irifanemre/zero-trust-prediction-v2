@@ -42,6 +42,7 @@ from ztp.response import tiered_response
 from ztp.schema import DAY, EVENT_COLUMNS, to_utc_naive
 from ztp.scoring import RiskResult, RiskScorer
 from ztp.state import StateStore, hits_from_records, hits_to_records
+from ztp.unsupervised import AnomaliKanali
 
 LOG = logging.getLogger(__name__)
 
@@ -127,6 +128,16 @@ class ZeroTrustPredictionPipeline:
             else None
         )
         self.adwin: Dict[str, Adwin] = {}
+        # v5 denetimsiz anomali kanalı (kurala BAĞLI DEĞİL): r6.2'de kaçan insider hiçbir kural tetiklemedi
+        self.anomali = (
+            AnomaliKanali(
+                tur=self.cfg.anomali_tur,
+                pencere_gun=self.cfg.anomali_pencere_gun,
+                yenileme_gun=self.cfg.anomali_yenileme_gun,
+            )
+            if self.cfg.anomali_enabled
+            else None
+        )
         self.bayes = BayesKapisi(esik=self.cfg.bayes_kapi_esigi, min_gozlem=self.cfg.bayes_min_gozlem)
         self.bayes_elenen: Dict[pd.Timestamp, List[dict]] = {}
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
@@ -267,7 +278,7 @@ class ZeroTrustPredictionPipeline:
         tr = np.array([r["gun"] < cut for r in rows])
         X = rows_to_matrix(rows)
         try:
-            model = LogisticModel.fit(X[tr], y[tr])
+            model = LogisticModel.fit(X[tr], y[tr], sinif_agirligi=self.cfg.pred_sinif_agirligi)
         except ValueError as exc:
             report["neden"] = str(exc)
             return report
@@ -430,6 +441,16 @@ class ZeroTrustPredictionPipeline:
                 if gs.graf_riski > 0:
                     explains[sid]["graf_riski"] = gs.aciklama()
             self.health.time("graf_sinyalleri", tg0)
+        # v5 (literatür §1.2–1.4): denetimsiz anomali kanalı. Kural tetiklenmesini BEKLEMEZ — tabanı sıfır olan
+        # kullanıcıya da skor üretebilen tek yol. Uyum penceresi bugünden önce biter; etiket kullanılmaz.
+        if self.anomali is not None:
+            an0 = time.perf_counter()
+            for sid, a in self.anomali.gun(day, self.profile.feats, today).items():
+                if sid in signals:
+                    signals[sid]["anomali_skoru"] = a.skor
+                    if a.skor > 0 and (ac := a.aciklama()):
+                        explains[sid]["anomali_skoru"] = ac
+            self.health.time("anomali_kanali", an0)
         for sid in signals:
             self.scorer.add_hits(sid, hits_today[sid])
             prov = self.scorer.compute(sid, day, signals[sid])

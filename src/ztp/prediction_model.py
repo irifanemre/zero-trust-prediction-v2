@@ -98,12 +98,23 @@ class LogisticModel:
     n_train: int
     positives: int
     trained_at: str
+    sinif_agirligi: bool = False  # eğitimde dengeleme uygulandı mı (kalibrasyon ↔ sıralama takası; denetim için kayıtlı)
     version: str = MODEL_VERSION
     features: Tuple[str, ...] = PREDICTION_FEATURES
     name: str = field(default="lojistik", init=False)
 
     @classmethod
-    def fit(cls, X: np.ndarray, y: np.ndarray, C: float = 1.0) -> "LogisticModel":
+    def fit(cls, X: np.ndarray, y: np.ndarray, C: float = 1.0, sinif_agirligi: bool = False) -> "LogisticModel":
+        """`sinif_agirligi=False` (varsayılan): kalibre olasılık hedeflenir.
+
+        Sınıf ağırlığı bir TAKASTIR, iyileştirme değil. Dengeleme azınlık sınıfının olasılıklarını taban oranının
+        çok üstüne şişirir: Brier ve ECE bozulur, "olasılık %30 dediğinde gerçekten %30 mu?" sorusunun cevabı
+        "hayır" olur. Buna karşılık SIRALAMA (AUPRC, recall@bütçe) iyileşebilir — ki 30'luk bütçede analistin
+        gördüğü şey sıradır, mutlak olasılık değil.
+
+        Bu yüzden anahtar var ama varsayılanda kapalı ve ikisi birlikte raporlanır: aynı modelin kalibrasyonu ve
+        sıralaması ayrı ayrı ölçülmeden hangisinin tercih edileceğine karar verilemez (14.5).
+        """
         from sklearn.linear_model import LogisticRegression
 
         X = np.asarray(X, dtype=float)
@@ -114,8 +125,7 @@ class LogisticModel:
             raise ValueError("eğitim için her sınıftan en az 5 örnek gerekir")
         mean, scale = X.mean(axis=0), X.std(axis=0)
         scale[scale == 0] = 1.0
-        # sınıf ağırlığı YOK: amaç sıralama değil kalibre olasılık (dengeleme olasılıkları şişirir, Brier'i bozar)
-        lr = LogisticRegression(C=C, max_iter=2000)
+        lr = LogisticRegression(C=C, max_iter=2000, class_weight=("balanced" if sinif_agirligi else None))
         lr.fit((X - mean) / scale, y)
         return cls(
             coef=[float(c) for c in lr.coef_[0]],
@@ -125,6 +135,7 @@ class LogisticModel:
             n_train=int(len(y)),
             positives=int(y.sum()),
             trained_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            sinif_agirligi=bool(sinif_agirligi),
         )
 
     def _z(self, f: Dict[str, float]) -> np.ndarray:
@@ -154,6 +165,7 @@ class LogisticModel:
             n_train=self.n_train,
             positives=self.positives,
             trained_at=self.trained_at,
+            sinif_agirligi=self.sinif_agirligi,
         )
 
     @classmethod
@@ -168,6 +180,7 @@ class LogisticModel:
             n_train=int(d["n_train"]),
             positives=int(d["positives"]),
             trained_at=str(d["trained_at"]),
+            sinif_agirligi=bool(d.get("sinif_agirligi", False)),  # eski modellerde alan yok → dengeleme yok
         )
 
 
@@ -192,6 +205,33 @@ def auc_score(p: np.ndarray, y: np.ndarray) -> Optional[float]:
             ranks[idx] = ranks[idx].mean()
     r_pos = ranks[: len(pos)].sum()
     return float((r_pos - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
+
+
+def auprc_score(p: np.ndarray, y: np.ndarray) -> Optional[float]:
+    """Precision–Recall eğrisinin altındaki alan (ortalama kesinlik).
+
+    Neden AUC yerine bu: AUROC paydasında NEGATİF sayısı var. 2801 kullanıcıda 1 insider varken (1:2800) negatif
+    sınıf her şeyi domine eder ve AUROC yüksek görünür — r6.2'de 0,775 çıktı, oysa precision@1 0,003'tü. AUPRC'nin
+    tabanı pozitif sınıfın oranıdır (burada 0,0001), yani "şans seviyesi" baştan görünür ve bir modelin gerçekten
+    şansın üstünde olup olmadığı okunabilir. Dengesiz veride literatürün önerdiği ölçüt budur.
+
+    Hesap, adım fonksiyonuna sağdan toplamla yapılır (sklearn'ün `average_precision_score`'u ile aynı tanım):
+        AP = Σ_k (R_k − R_{k−1}) · P_k
+    Bağlı skorlar tek eşik gibi işlenir; aksi hâlde sıralama rastgele kopar ve değer yapay şişer.
+    """
+    p, y = np.asarray(p, dtype=float), np.asarray(y, dtype=int)
+    if len(p) == 0 or y.sum() == 0 or y.sum() == len(y):
+        return None
+    sira = np.argsort(-p, kind="stable")
+    ys, ps = y[sira], p[sira]
+    tp = np.cumsum(ys)
+    fp = np.cumsum(1 - ys)
+    # bağlı skor grubunun yalnız SON indeksi bir eşiktir (grubun ortasında kesmek tanımsızdır)
+    son = np.r_[ps[1:] != ps[:-1], True]
+    tp, fp = tp[son], fp[son]
+    precision = tp / np.maximum(tp + fp, 1)
+    recall = tp / y.sum()
+    return float(np.sum(np.diff(np.r_[0.0, recall]) * precision))
 
 
 def calibration_report(p: Sequence[float], y: Sequence[int], bins: int = 10) -> dict:
@@ -225,6 +265,10 @@ def calibration_report(p: Sequence[float], y: Sequence[int], bins: int = 10) -> 
         brier_taban=round(brier_base, 4) if brier_base is not None else None,
         brier_beceri=round(1 - brier / brier_base, 3) if brier_base else None,
         auc=round(auc_score(p, y), 3) if auc_score(p, y) is not None else None,
+        # AUPRC ve tabanı YAN YANA: tek başına AUPRC de yorumlanamaz, taban oranına göre okunur (1.3)
+        auprc=round(ap, 4) if (ap := auprc_score(p, y)) is not None else None,
+        auprc_taban=round(base, 4) if 0 < base < 1 else None,
+        auprc_kat=(round(ap / base, 1) if ap is not None and 0 < base < 1 else None),
         ece=round(ece, 4),
         guvenilirlik=table,
     )

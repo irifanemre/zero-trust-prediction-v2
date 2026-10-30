@@ -53,6 +53,12 @@ HEPSI_ACIK = dict(
     belirsizlik_enabled=True,
     kanit_dogrulama="dengeli",
     cok_ajanli_rapor=True,
+    # v5: r6.2 ölçümünün yapısal bulgusuna cevap — çarpan yerine toplamsal terim + kurala bağlı olmayan kanal
+    graf_toplamsal_agirlik=0.5,
+    anomali_enabled=True,
+    anomali_agirligi=0.5,
+    anomali_dogrulama_esigi=0.995,
+    pred_sinif_agirligi=True,
 )
 
 
@@ -79,6 +85,7 @@ def kosu(cert_dir: str, answers: str, out: Path, days: int, warmup: int, budget:
         adwin_izlenen=len(pipe.adwin),
         bayes_elenen_gun=len(pipe.bayes_elenen),
         bayes_elenen_vaka=sum(len(v) for v in pipe.bayes_elenen.values()),
+        **(pipe.anomali.etkinlik() if pipe.anomali is not None else {}),
     )
     return dict(
         etkinlik=etkinlik,

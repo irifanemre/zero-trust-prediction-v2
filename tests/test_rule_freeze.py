@@ -9,7 +9,8 @@ import json
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v4.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
+V4 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v4.json"
 V3 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v3.json"
 V2 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v2.json"
 
@@ -21,8 +22,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 22  # v4: kural kümesi v2'den beri aynı, değişen yalnız yetenekler
-    assert m["etiket"] == "kurallar-donduruldu-v4"
+    assert len(m["degerler"]["kurallar"]) == 22  # v5: kural kümesi v2'den beri aynı, değişen yalnız yetenekler
+    assert m["etiket"] == "kurallar-donduruldu-v5"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -41,10 +42,25 @@ def test_v4_kurallari_v3_ile_ayni():
     varsayılanlarına eklenen bayraklar. Bayraklar varsayılanda kapalı olduğundan v4'ün kapalı davranışı v3 ile
     birebir aynıdır; bunu `scripts/surum_karsilastir.py` r4.2'de ölçer.
     """
-    v3, v4 = (json.loads(p.read_text(encoding="utf-8")) for p in (V3, MANIFEST))
+    v3, v4 = (json.loads(p.read_text(encoding="utf-8")) for p in (V3, V4))
     assert v3["degerler"]["kurallar"] == v4["degerler"]["kurallar"]
     degisen = {f for f in v4["dosyalar"] if v3["dosyalar"].get(f) != v4["dosyalar"][f]}
     assert degisen == {"src/ztp/config.py", "src/ztp/profile.py", "src/ztp/scoring.py"}
+
+
+def test_v5_kurallari_v4_ile_ayni():
+    """v5, r6.2 ölçümünün yapısal bulgusuna cevap verir (`docs/r62-v4-olcumu.md`).
+
+    Değişen: graf riski için TOPLAMSAL yol, kurala bağlı olmayan denetimsiz anomali kanalı (`unsupervised.py`),
+    lojistik modelde sınıf ağırlığı anahtarı. Hiçbir KURAL, eşik ya da ağırlık değişmedi; dondurulan dosya
+    kümesine bir dosya EKLENDİ (anomali kanalı skora girdiği için donmak zorunda).
+    """
+    v4, v5 = (json.loads(p.read_text(encoding="utf-8")) for p in (V4, MANIFEST))
+    assert v4["degerler"]["kurallar"] == v5["degerler"]["kurallar"]
+    eklenen = set(v5["dosyalar"]) - set(v4["dosyalar"])
+    assert eklenen == {"src/ztp/unsupervised.py"}
+    degisen = {f for f in v4["dosyalar"] if v5["dosyalar"].get(f) != v4["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py", "src/ztp/prediction_model.py", "src/ztp/scoring.py"}
 
 
 def test_v4_bayraklari_varsayilanda_kapali():
@@ -58,6 +74,21 @@ def test_v4_bayraklari_varsayilanda_kapali():
     assert c.belirsizlik_enabled is False
     assert c.kanit_dogrulama == "kapali"
     assert c.cok_ajanli_rapor is False
+
+
+def test_v5_bayraklari_varsayilanda_kapali():
+    """Aynı sözleşme v5 için: toplamsal graf, denetimsiz kanal ve sınıf ağırlığı varsayılanda karar yolunda DEĞİL.
+
+    r6.2 ölçümünden sonra bu daha da önemli: ölçülen tek veride açmak yakalamayı değiştirmeden yanlış alarmı
+    ikiye katladı. Varsayılanı değiştirmek için bu betiklerin ablasyon sonucu gerekir (14.5).
+    """
+    from ztp.config import TenantConfig
+
+    c = TenantConfig()
+    assert c.graf_toplamsal_agirlik == 0.0
+    assert c.anomali_enabled is False and c.anomali_agirligi == 0.0
+    assert c.anomali_dogrulama_esigi == 0.0
+    assert c.pred_sinif_agirligi is False
 
 
 def test_hash_ignores_line_endings(tmp_path):

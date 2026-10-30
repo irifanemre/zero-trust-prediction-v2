@@ -25,6 +25,7 @@ class RiskResult:
     hits: List[Hit]
     contributions: Dict[str, float]
     critical: bool = False
+    anomali: float = 0.0  # v5: denetimsiz kanalın o günkü skoru [0, 1] (kanal kapalıysa 0)
 
 
 class RiskScorer:
@@ -95,7 +96,19 @@ class RiskScorer:
             raw += add
             contrib["PRED-MODEL"] = add
         contrib = {k: v * m for k, v in contrib.items()}
-        return RiskResult(sid, raw, base, mult, 0.0, window, contrib)
+        # v5 — TOPLAMSAL terimler. Çarpanların ARDINDAN ve `m` ile ölçeklenmeden eklenirler; sebebi r6.2 ölçümü:
+        # çarpan tabanı sıfır olan kullanıcıya hiçbir şey ekleyemez (1,5 × 0 = 0) ve kaçan insider tam o durumdaydı.
+        # Toplamsal terim kural tetiklenmese de skor üretir. Her ikisi de varsayılanda 0 → skor birebir aynı kalır.
+        if self.cfg.graf_toplamsal_agirlik > 0 and graf_riski > 0:
+            add = float(self.cfg.graf_toplamsal_agirlik) * graf_riski * 10.0
+            raw += add
+            contrib["GRAF-TOPLAMSAL"] = add
+        anomali = float(signals.get("anomali_skoru", 0.0) or 0.0)
+        if self.cfg.anomali_agirligi > 0 and anomali > 0:
+            add = float(self.cfg.anomali_agirligi) * anomali * 10.0
+            raw += add
+            contrib["ANOMALI-DENETIMSIZ"] = add
+        return RiskResult(sid, raw, base, mult, 0.0, window, contrib, anomali=anomali)
 
     def calibrate(self, day: pd.Timestamp, results: Dict[str, RiskResult]) -> None:
         """13.4 Kalibrasyon: ham skor yorumlanamaz; kurumdaki tüm kullanıcı-günlerine göre yüzdelik dilim."""
@@ -118,10 +131,16 @@ class RiskScorer:
     def corroborated(self, r: RiskResult) -> bool:
         """v2 doğrulama kapısı: tek zayıf sinyal kuyruğa girmez. 7 günlük pencerede 2+ farklı kural, aynı sinyalin
         `kuyruk_tekrar_gun` farklı günde tekrarı, güçlendirici çarpan (> 1), kritik ya da kurumun en uç skorları
-        (yüzdelik ≥ `kuyruk_kacis_yuzdelik`: tek ama çok güçlü sinyal) yeterlidir."""
+        (yüzdelik ≥ `kuyruk_kacis_yuzdelik`: tek ama çok güçlü sinyal) yeterlidir.
+
+        v5: `anomali_dogrulama_esigi` açıksa denetimsiz kanalın uç skoru da "güçlü tek sinyal" sayılır. Bu ayrı bir
+        anahtardır çünkü toplamsal terim tek başına kapıyı geçmez: kural tetiklenmemiş bir vakanın ne 2 farklı
+        kuralı ne çarpanı olur, yalnızca `kuyruk_kacis_yuzdelik` (0,998 → 2801 kullanıcıda ilk ~6) kalır. Yani
+        toplamsal skoru ÖLÇMEK için bu anahtarın da açılması gerekir; ikisi ablasyonda ayrı ayrı görünür."""
         return (
             r.critical
             or r.percentile >= self.cfg.kuyruk_kacis_yuzdelik
+            or (self.cfg.anomali_dogrulama_esigi > 0 and r.anomali >= self.cfg.anomali_dogrulama_esigi)
             or any(v > 1 for v in r.multipliers.values())
             or len({h.rule_id for h in r.hits}) >= 2
             or len({h.day for h in r.hits}) >= self.cfg.kuyruk_tekrar_gun

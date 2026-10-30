@@ -56,6 +56,57 @@ VARIANTS: Dict[str, dict] = {
         aciklama="#2 kuyruk sırası: akran grubundan yapısal sapma",
         cfg=dict(priority_peer_weight=0.5),
     ),
+    # ---- v4 bileşenleri TEK TEK. r6.2 ve r4.2 ölçümlerinde hepsi BİRLİKTE açılmıştı; hangisinin hangi etkiyi
+    # ürettiği bu yüzden bilinmiyordu (`docs/r62-v4-olcumu.md` §6.1). Aşağıdaki varyantlar o soruyu ayrıştırır.
+    "v4_graf_carpan": dict(
+        aciklama="v4 graf riski yalnız ÇARPAN olarak (1 + 0,5·graf) — r4.2/r6.2'de kullanılan hâli",
+        cfg=dict(graf_enabled=True, graf_agirligi=0.5),
+    ),
+    "v4_adwin": dict(
+        aciklama="v4 yalnız ADWIN: davranış kayarsa kişisel baz çizgisi o günden başlar",
+        cfg=dict(adwin_enabled=True),
+    ),
+    "v4_bayes": dict(
+        aciklama="v4 yalnız Bayes kapısı (etiket yoksa hiçbir şey elemez — ölçümün amacı bunu göstermek)",
+        cfg=dict(bayes_kapi_esigi=0.3),
+    ),
+    "v4_belirsizlik": dict(
+        aciklama="v4 yalnız Venn-Abers belirsizlik aralığı (vakaya bilgi ekler, sıralamayı değiştirmemeli)",
+        cfg=dict(belirsizlik_enabled=True),
+    ),
+    # ---- v5: r6.2'nin yapısal bulgusuna cevap. ÇARPAN tabanı sıfır olana ulaşamaz (1,5 × 0 = 0); kaçan insider
+    # tam o durumdaydı. İki ayrı yol ayrı ayrı ölçülür, sonra birlikte.
+    "v5_graf_toplamsal": dict(
+        aciklama="v5 graf riski ÇARPAN yerine TOPLAMSAL terim (raw += 0,5·graf·10)",
+        cfg=dict(graf_enabled=True, graf_agirligi=0.0, graf_toplamsal_agirlik=0.5),
+    ),
+    "v5_anomali_ecod": dict(
+        aciklama="v5 denetimsiz ECOD kanalı, skora toplamsal (kural tetiklenmesini beklemez)",
+        cfg=dict(anomali_enabled=True, anomali_agirligi=0.5, anomali_dogrulama_esigi=0.995),
+    ),
+    "v5_anomali_orman": dict(
+        aciklama="v5 denetimsiz Isolation Forest kanalı (ECOD ile karşılaştırma)",
+        cfg=dict(anomali_enabled=True, anomali_tur="orman", anomali_agirligi=0.5, anomali_dogrulama_esigi=0.995),
+    ),
+    "v5_anomali_sinyalsiz": dict(
+        aciklama="v5 ECOD kanalı AÇIK ama ağırlık 0 — sinyal üretmek tek başına skoru değiştirmemeli (kontrol)",
+        cfg=dict(anomali_enabled=True, anomali_agirligi=0.0),
+    ),
+    "v5_toplamsal_hepsi": dict(
+        aciklama="v5 toplamsal graf + ECOD kanalı birlikte",
+        cfg=dict(
+            graf_enabled=True,
+            graf_agirligi=0.0,
+            graf_toplamsal_agirlik=0.5,
+            anomali_enabled=True,
+            anomali_agirligi=0.5,
+            anomali_dogrulama_esigi=0.995,
+        ),
+    ),
+    "pred_sinif_agirligi": dict(
+        aciklama="lojistik modelde dengeleme: sıralama ↔ kalibrasyon takası (AUPRC ile Brier birlikte okunur)",
+        cfg=dict(pred_sinif_agirligi=True),
+    ),
 }
 # Varlık katmanlandırma (#4) ablasyona ayrı eklenir: kalıplar müşteriye özgüdür, CERT'te varlık envanteri yoktur.
 # Kullanımı: run_ablation(..., variants={**VARIANTS, "varlik_katmani": varlik_varyanti(tier0=[...], tier1=[...])}).
@@ -105,6 +156,7 @@ def run_ablation(
         )
         lp = summ.get("etiketli_veri_precision") or {}
         cal = (summ.get("tahmin_kalibrasyonu") or {}).get("sezgisel") or {}
+        egri = summ.get("butce_recall_egrisi") or {}
         rows.append(
             dict(
                 varyant=name,
@@ -114,9 +166,16 @@ def run_ablation(
                 vaka=summ["vaka_hacmi"]["toplam"],
                 precision_at_n=lp.get("precision_at_n"),
                 precision_at_3=lp.get("precision@3"),
+                # Recall@bütçe: precision taban oranıyla çöktüğü için tek başına kapsama/precision yetmiyor (A4)
+                recall_30_kullanici=lp.get("recall@30_kullanici"),
+                recall_10_kullanici=lp.get("recall@10_kullanici"),
                 erkenlik_medyan=_median([v for v in summ["erkenlik_gun"].values() if v is not None]),
                 tahmin_auc=cal.get("auc"),
+                tahmin_auprc=cal.get("auprc"),
+                tahmin_auprc_kat=cal.get("auprc_kat"),  # taban oranının kaç katı (şans seviyesine göre)
                 tahmin_brier=cal.get("brier"),
+                butce_egrisi=egri.get("egri"),
+                anomali_etkinlik=(pipe.anomali.etkinlik() if pipe.anomali is not None else None),
             )
         )
     ref = next((r for r in rows if r["varyant"] == "tam"), None)
@@ -132,6 +191,8 @@ def run_ablation(
                 if r["precision_at_n"] is None or ref["precision_at_n"] is None
                 else round(r["precision_at_n"] - ref["precision_at_n"], 3)
             )
+            # Kapsama artışının BEDELİ: vaka hacmi farkı. r6.2 dersi — kapsama sabitken vaka iki katına çıkabiliyor.
+            r["vaka_farki"] = r["vaka"] - ref["vaka"]
     return rows
 
 
@@ -143,16 +204,24 @@ def _median(vals: List[float]) -> Optional[float]:
 
 
 def format_ablation(rows: List[dict]) -> str:
-    head = f"{'varyant':<16}{'kapsama':>10}{'Δkaps':>8}{'vaka':>7}{'prec@N':>9}{'Δprec':>8}{'prec@3':>9}{'erken':>7}{'AUC':>7}  açıklama"
-    lines = ["ABLASYON (19.5) — aynı veri, bileşen kapalı:", head, "-" * len(head)]
+    head = (
+        f"{'varyant':<22}{'kapsama':>10}{'Δkaps':>8}{'vaka':>7}{'Δvaka':>8}{'prec@N':>9}{'Δprec':>8}"
+        f"{'rec@10k':>9}{'rec@30k':>9}{'erken':>7}{'AUPRC':>8}{'×taban':>8}  açıklama"
+    )
+    lines = ["ABLASYON (19.5) — aynı veri, tek bileşen değişken:", head, "-" * len(head)]
     for r in rows:
         lines.append(
-            f"{r['varyant']:<16}{r['kapsama']:>10}{_f(r.get('kapsama_farki'), True):>8}{r['vaka']:>7}{_f(r['precision_at_n']):>9}"
-            f"{_f(r.get('precision_farki'), True):>8}{_f(r['precision_at_3']):>9}{_f(r['erkenlik_medyan']):>7}{_f(r['tahmin_auc']):>7}  {r['aciklama']}"
+            f"{r['varyant']:<22}{r['kapsama']:>10}{_f(r.get('kapsama_farki'), True):>8}{r['vaka']:>7}"
+            f"{_f(r.get('vaka_farki'), True):>8}{_f(r['precision_at_n']):>9}{_f(r.get('precision_farki'), True):>8}"
+            f"{_f(r.get('recall_10_kullanici')):>9}{_f(r.get('recall_30_kullanici')):>9}{_f(r['erkenlik_medyan']):>7}"
+            f"{_f(r.get('tahmin_auprc')):>8}{_f(r.get('tahmin_auprc_kat')):>8}  {r['aciklama']}"
         )
-    lines.append(
-        "Yorum: Δ negatifse bileşen kapsama/precision'a katkı sağlıyor; ~0 ise katkısı bu veride ölçülemedi (14.5 giriş şartı sağlanmaz)."
-    )
+    lines += [
+        "Okuma: Δ, 'tam' varyantına göre farktır. Δkaps > 0 ise bileşen kapsamayı ARTIRIYOR; ~0 ise katkısı bu",
+        "veride ölçülemedi (14.5 giriş şartı sağlanmaz). Δvaka, bedelini verir: kapsama artmadan vaka artıyorsa",
+        "bileşen yalnız yanlış alarm üretmiştir — r6.2'de v4 bileşenlerinin birlikte yaptığı tam buydu.",
+        "AUPRC tek başına okunmaz: '×taban' kolonu şans seviyesinin kaç katı olduğunu verir.",
+    ]
     return "\n".join(lines)
 
 
