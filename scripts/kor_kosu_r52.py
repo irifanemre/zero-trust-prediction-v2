@@ -59,6 +59,7 @@ MODEL = REPO / "configs" / "models" / "kor-r52-birincil-lr.json"
 SPLIT = REPO / "configs" / "splits" / "cert-r5.2-kullanici-bolmesi.json"
 SAMPLE = REPO / "configs" / "splits" / "cert-r5.2-orneklem.json"  # plan §3.2 (f, katmanlı, tohum 42)
 WARMUP, DAYS, BUDGET, KS = 21, 90, 10, (1, 3, 5, 10)  # BUDGET varsayılanı; --budget ile ezilir (r6.2: 30)
+BUTCELER = (1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100)  # bütçe–recall eğrisinin eksen noktaları
 
 
 def git(*a: str) -> str:
@@ -128,6 +129,9 @@ def run_window(i: int, w: dict, args: argparse.Namespace, out: Path) -> dict:
         kuyruga_giren=sorted(s for s, al in m.alerts_by_sid.items() if al),
         kullanicilar=sorted(data.directory["sid"].astype(str)),
         at_k={p: {str(k): v for k, v in d.items()} for p, d in at_k.items()},
+        # bütçe–recall eğrisi: ham sayaçlar (pencereler toplanabilsin diye oran DEĞİL). Tek sayı yerine eğri,
+        # çünkü "recall@30" bütçeyi 100'e çıkarınca ne kazanıldığını söylemiyor (literatür §7.3).
+        butce_egrisi=_butce_sayaclari(m, windows),
         kural_tetikleme=dict(sorted(m.rule_hits.items())),
         # gölge moddaki kurallar kuyruğa girmez, ayrı kaydedilir; ısınma günleri hariç
         golge_mod=dict(
@@ -144,9 +148,73 @@ def run_window(i: int, w: dict, args: argparse.Namespace, out: Path) -> dict:
     return res
 
 
+def _butce_sayaclari(m, windows: dict) -> dict:
+    """Pencere başına bütçe–recall HAM sayaçları: oranlar pencereler birleştirilirken hesaplanır.
+
+    Oran kaydetmek yanlış olur: dört pencerenin recall'ı ortalanamaz, çünkü fırsat sayıları farklıdır.
+    Burada her bütçe için (yakalanan insider-gün, fırsat, incelenen vaka, yakalanan kullanıcılar) tutulur;
+    `aggregate` bunları toplar ve kullanıcı kümelerini BİRLEŞTİRİR (bir insider pencere 2'de yakalanmış olabilir).
+    """
+    gunler = sorted(m.queue_by_day)
+    firsat = {sid: [d for d in gunler if any(a <= d <= b for a, b in ar)] for sid, ar in windows.items()}
+    toplam_firsat = sum(len(v) for v in firsat.values())
+    olculebilir = sorted(sid for sid, v in firsat.items() if v)
+    out: dict = {}
+    for k in BUTCELER:
+        gun_sayisi, yakalanan, incelenen = 0, set(), 0
+        for d in gunler:
+            ilk_k = m.queue_by_day[d][:k]
+            incelenen += len(ilk_k)
+            for sid in olculebilir:
+                if d in firsat[sid] and sid in ilk_k:
+                    gun_sayisi += 1
+                    yakalanan.add(sid)
+        out[str(k)] = dict(yakalanan_gun=gun_sayisi, incelenen=incelenen, yakalananlar=sorted(yakalanan))
+    out["payda"] = dict(firsat=toplam_firsat, olculebilir=olculebilir, ort_aktif=round(
+        float(np.mean([d["aktif_kullanici"] for d in m.daily])) if m.daily else 0.0, 1
+    ))
+    return out
+
+
 # ------------------------------------------------------------------------------------------------------ birleştirme
 def ratio(a: int, b: int):
     return round(a / b, 3) if b else None
+
+
+def _butce_birlestir(wins: list) -> dict:
+    """Pencerelerin ham bütçe sayaçlarını birleştirir: günler toplanır, insider kümeleri BİRLEŞTİRİLİR."""
+    varsa = [w["butce_egrisi"] for w in wins if w.get("butce_egrisi")]
+    if not varsa:
+        return {}
+    firsat = sum(e["payda"]["firsat"] for e in varsa)
+    olculebilir = sorted(set().union(*(set(e["payda"]["olculebilir"]) for e in varsa)))
+    aktif = round(sum(e["payda"]["ort_aktif"] for e in varsa) / len(varsa), 1)
+    satirlar = []
+    for k in BUTCELER:
+        anahtar = str(k)
+        gun = sum(e[anahtar]["yakalanan_gun"] for e in varsa)
+        incelenen = sum(e[anahtar]["incelenen"] for e in varsa)
+        yakalanan = set().union(*(set(e[anahtar]["yakalananlar"]) for e in varsa))
+        satirlar.append(
+            dict(
+                butce=k,
+                butce_orani=round(k / aktif, 5) if aktif else None,
+                incelenen_vaka=incelenen,
+                recall_gun=ratio(gun, firsat),
+                recall_kullanici=ratio(len(yakalanan), len(olculebilir)),
+                yakalanan_insider=len(yakalanan),
+                vaka_basina_insider=None,
+            )
+        )
+    for onceki, simdi in zip(satirlar, satirlar[1:]):
+        d_ins = simdi["yakalanan_insider"] - onceki["yakalanan_insider"]
+        d_vaka = simdi["incelenen_vaka"] - onceki["incelenen_vaka"]
+        simdi["vaka_basina_insider"] = round(d_vaka / d_ins, 1) if d_ins > 0 else None
+    return dict(
+        payda=dict(insider_gun=firsat, insider_kullanici=len(olculebilir), ort_aktif_kullanici=aktif),
+        egri=satirlar,
+        not_="Bütçe o günkü kuyruk uzunluğunu aşarsa kuyruk neyse o alınır; düzleşme sıranın değil kuyruğun sınırı olabilir.",
+    )
 
 
 def aggregate(wins: list, answers_dir: str, all_windows: list, release: str, users=None) -> dict:
@@ -247,6 +315,7 @@ def aggregate(wins: list, answers_dir: str, all_windows: list, release: str, use
         atlanan_pencereler=all_windows,
         yakalama=dict(degerlendirilebilir=block(ev), kismi_pencereli=block(pa), senaryo_turu=by_type, olculmeyen=unmeasured),
         precision_at_k=at_k,
+        butce_recall_egrisi=_butce_birlestir(wins),
         confusion=cm,
         erkenlik=dict(medyan=median(early) if early else None, senaryo_turu=early_t, n=len(early)),
         kural_tetikleme=dict(sorted(rules.items())),
@@ -335,6 +404,25 @@ def write_summary(res: dict, out: Path) -> None:
             "",
             f"Erkenlik medyanı: {a['erkenlik']['medyan']} gün ({a['erkenlik']['senaryo_turu']})",
             "",
+        ]
+        if (egri := a.get("butce_recall_egrisi")) and egri.get("egri"):
+            p = egri["payda"]
+            md += [
+                "## Bütçe–recall eğrisi",
+                "",
+                f"Payda: {p['insider_kullanici']} ölçülebilir insider, {p['insider_gun']} insider-gün fırsatı, "
+                f"ortalama {p['ort_aktif_kullanici']} aktif kullanıcı/gün.",
+                "",
+                "| Bütçe | Bütçe oranı | İncelenen vaka | recall (gün) | recall (kullanıcı) | Yakalanan | +1 insider için ek vaka |",
+                "|---|---|---|---|---|---|---|",
+            ]
+            for r in egri["egri"]:
+                md.append(
+                    f"| {r['butce']} | {fmt(r['butce_orani'])} | {r['incelenen_vaka']:,} | {fmt(r['recall_gun'])} | "
+                    f"{fmt(r['recall_kullanici'])} | {r['yakalanan_insider']} | {fmt(r['vaka_basina_insider'])} |"
+                )
+            md += ["", egri["not_"], ""]
+        md += [
             "## Kural tetikleme",
             "",
             "| Kural | Canlı | Gölge mod |",
