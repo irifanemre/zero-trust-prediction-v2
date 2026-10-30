@@ -119,3 +119,16 @@ Top-1 tabanı (en sık tek taktiğin oranı) çok daha düşüktür ve modele ge
 `top1 ≥ 2 × en_sik_taktik_orani` olarak düzeltildi. Top-3 yine **raporlanır**, ama başarı ölçütü değildir.
 
 Bu sapma gerçek veri görülmeden yapıldı; r4.2 ya da r6.2'den hiçbir sonuç bu karara girmedi.
+
+### Sapma 2 — A'nın başarı eşiği eksikti
+
+**30 Ekim, ölçümden SONRA fark edildi.** Eşik "Bayes kapısı sıfırdan farklı eleme yapar **ve**
+precision@N düşmeden vaka hacmi azalır" diyordu. Ölçüm bunu harfiyen sağladı: 1.725 eleme,
+precision 0,045 → 0,238. Ama aynı koşuda **kapsama 22/34'ten 18/34'e düştü**.
+
+Eşik, düşmesi istenmeyen şeyleri tek tek saymadığı için eksikti: 4 senaryo kaybederek precision
+yükseltmek de o cümleyi sağlar. Bu koşunun eşiği **değiştirilmiyor**, sonuç olduğu gibi raporlanıyor
+(`docs/v6a-geri-bildirim-olcumu.md`). Sonraki ölçümlerde kuyruk kısan her bileşen için eşik:
+**"precision artar VE kapsama ±1 içinde kalır"**.
+
+Ders: "X düşmeden Y iyileşir" biçimindeki eşikler, düşmesi istenmeyen her şeyi saymadıkça eksiktir.

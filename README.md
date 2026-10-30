@@ -280,12 +280,13 @@ vakaya bakan bir analist için sistem **kötüleşti**, 10 vakaya bakan için iy
 | ADWIN | **117 kullanıcıda** baz çizgisini kesti (958 izlenen) |
 | Bayes kapısı | **0 vaka eledi** — tasarım gereği: analist etiketi yok, etiketsiz örüntü susturulmaz |
 
-"Hiç tetiklenmedi" grubu 7 → 6'ya indi. Graf **çarpan** olduğu için tabanı sıfır olan kullanıcıya ulaşamaz;
-bu kazanım ADWIN'den gelmiş olmalı — baz çizgisi kesilince daha önce normal görünen davranış anomali hâline
-geldi. Bu bir çıkarımdır, ölçüm değil: bileşenler birlikte açıldığı için katkı ayrıştırılamıyor.
+"Hiç tetiklenmedi" grubu 7 → 6'ya indi. Bu belgenin önceki sürümünde kazanımın ADWIN'den gelmiş olabileceği
+yazıyordu — ölçüm değil **çıkarım** olduğu da belirtilmişti. **30 Ekim ablasyonu o çıkarımı çürüttü:** ADWIN tek
+başına yakalamayı hiç artırmıyor, recall@10'u 0,618'den 0,588'e **düşürüyor** ve +79 vaka maliyeti getiriyor.
+Kazancın tamamı graf çarpanından geliyor (aşağıdaki ablasyon tablosu).
 
 **Çekinceler:** (1) r4.2 kuralların ayarlandığı veridir, yani üst sınır. (2) Bileşenler birlikte açıldı; tek tek
-ablasyon yapılmadı. (3) Süre 4,3 katına çıktı — gerçek kurumda günlük koşu için ciddi bir maliyet.
+ablasyon aşağıda. (3) Süre 4,3 katına çıktı — gerçek kurumda günlük koşu için ciddi bir maliyet.
 
 ### Aynı bileşenler r6.2'de (2801 kullanıcı, 360 gün, bütçe 30)
 
@@ -316,6 +317,66 @@ kaydına yazılıyor.
 > Bu ölçüm **kör değil**: r6.2 kör koşusu bir kez yapıldı, o veri yandı. Koşu kaydı bunu dosyanın içinde
 > taşıyor (`"tur": "… KÖR DEĞİL"`). Geriye kalan tek kör veri **r1** ve dokunulmadı.
 > Ayrıntı: [`docs/r62-v4-olcumu.md`](docs/r62-v4-olcumu.md).
+
+### Bileşen ablasyonu (r4.2, 90 gün, bütçe 30)
+
+v4 bileşenleri r4.2 ve r6.2'de hep **birlikte** açılmıştı; hangisinin ne yaptığı bilinmiyordu.
+30 Ekim ablasyonu ayrıştırdı — her satır aynı veride, tek bileşen değişkenle:
+
+| Varyant | Yakalanan | Δ | Vaka | Δvaka | recall@10 (kull.) |
+|---|---|---|---|---|---|
+| `tam` (hepsi kapalı) | 22/34 | — | 1.939 | — | 0,618 |
+| **`graf_carpan`** | **27/34** | **+5** | 2.069 | +130 | **0,824** |
+| `graf_toplamsal` | 22/34 | +0 | 1.967 | +28 | 0,676 |
+| `anomali_ecod` | 22/34 | +0 | 2.010 | +71 | 0,676 |
+| `anomali_orman` | 22/34 | +0 | 2.111 | +172 | 0,676 |
+| `adwin` | 22/34 | +0 | 2.018 | +79 | **0,588** ▼ |
+| `bayes_kapi` · `belirsizlik` | 22/34 | +0 | 1.939 | +0 | 0,618 |
+
+**Kayıp tespitte değil sıralamada.** Kaçan 12 insider'ın **5'i zaten tespit edilmişti** — kural tetiklendi,
+kanıt vardı, bütçe yarışını kaybetti. Graf çarpanı bu 5'in **tamamını** kurtardı (`BÜTÇE DIŞI` 5 → 0).
+
+Üç şey ölçümle ortaya çıktı:
+
+1. **Kazancın tamamı graf çarpanından geliyor.** Toplamsal yol (+28 vaka) hiçbir ek insider getirmedi:
+   çarpan sıralamayı *açar*, toplama *ezer*.
+2. **ADWIN zarar veriyor** — recall@10'u 0,618'den 0,588'e düşürüyor, +79 vaka maliyetiyle.
+   README'nin önceki sürümünde "+5 insider ADWIN'den gelmiş olmalı" diye bir **çıkarım** vardı
+   (ölçüm değil diye işaretliydi); ölçüm onu çürüttü.
+3. **İki bayrak hiçbir şey okumuyormuş.** `BayesKapisi.ogren()` hiçbir yerden çağrılmıyor,
+   `belirsizlik_enabled` hiçbir yerde okunmuyordu. v6-A'da ikisi de bağlandı.
+
+Ayrıntı: [`docs/r62-v4-olcumu.md`](docs/r62-v4-olcumu.md) · ham çıktı `ztp_out_ablasyon_r42/ablasyon.md`.
+
+### v6-A: analist geri bildirim döngüsü (r4.2)
+
+| Ölçüt | `tam` | **döngü** | döngü, kapı kapalı | %15 gürültülü etiket |
+|---|---|---|---|---|
+| **Yakalanan** | **22/34** | **18/34** | **22/34** | **18/34** |
+| Vaka | 1.939 | **214** | 1.939 | 217 |
+| precision@N | 0,045 | **0,238** | 0,045 | 0,235 |
+| precision@1 | 0,420 | **0,537** | 0,443 | 0,529 |
+| recall@10 (kull.) | 0,618 | 0,529 | **0,647** | 0,529 |
+| Bayes elediği | 0 | **1.725** | 0 | 1.722 |
+
+**Döngünün etkisi Bayes kapısından ibaret.** Kapı kapalıyken etiket, Venn-Abers ve periyodik yeniden
+eğitim birlikte kuyruğun **içeriğini değiştirmiyor** — `prediction_weight = 0` olduğu için modelin
+olasılığı skora zaten girmiyor. Ama **sırası** değişiyor (recall@10 0,618 → 0,647): analistin
+"yanlış pozitif" etiketi `×0,2` çarpanını canlandırıyor — v1'den beri kodda duran ama etiketsiz
+ortamda hiç çalışmamış bir mekanizma. Döngünün bedelsiz tek kazancı budur.
+
+**Kapının kendisi sert bir takas:** vaka −%89, precision 5,3×, ama **4 senaryo kayıp**. Analist
+günde 21 yerine 2,4 vaka görüyor ve %24'ü gerçek (önceden %4,5) — kaçan 4 insider pahasına.
+
+**Gürültülü etikete dayanıklı:** analistin %15'i yanılsa bile sonuç neredeyse değişmiyor (18/34,
+217 vaka). Beta-binom sonsalı biriken sayımlara baktığı için tek tek hatalar sönüyor.
+
+Ön kayıttaki iki beklentiden **biri tuttu** (vaka ≥%10 düşer), **biri tutmadı** (kapsama ±1 içinde
+kalır). Başarı eşiğinin kendisi de eksikti: "precision düşmeden vaka azalır" diyordu ve harfiyen
+tuttu, ama kapsama kaybını saymıyordu. Sapma kaydına yazıldı.
+
+Ayrıntı: [`docs/v6a-geri-bildirim-olcumu.md`](docs/v6a-geri-bildirim-olcumu.md) ·
+ön kayıt [`docs/sprint-v6-on-kayit.md`](docs/sprint-v6-on-kayit.md).
 
 ## Lisans
 
