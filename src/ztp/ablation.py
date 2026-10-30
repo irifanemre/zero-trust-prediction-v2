@@ -151,6 +151,21 @@ VARIANTS: Dict[str, dict] = {
         aciklama="v6-D: UEBA-0022 (sızıntı kanalı ani artış) ÖLÇÜM için yayında",
         catalog=_yayina(("UEBA-0022",)),
     ),
+    # ---- v6 katman B: saldırı yolu tahmini. Ağırlık 0 olduğu için kuyruğu DEĞİŞTİRMEMELİ —
+    # bu varyant hem o sözleşmeyi sınar hem sonraki adım isabetini ölçer (eşik: top-1 ≥ 2× taban).
+    "v6b_saldiri_yolu": dict(
+        aciklama="v6-B: n-gram saldırı yolu tahmini (skora girmez, yalnız anlatıya)",
+        cfg=dict(saldiri_yolu_enabled=True, saldiri_yolu_model="ngram", saldiri_yolu_baglam=2),
+    ),
+    # ---- v6 katman C: öğrenen graf gömme. Eşik 27/34 — graf ÇARPANININ tek başına verdiği.
+    "v6c_ogrenen_graf": dict(
+        aciklama="v6-C: öğrenen graf gömme, skora toplamsal (eşik: 27/34'ü geçmeli)",
+        cfg=dict(graf_ogrenen_enabled=True, graf_ogrenen_agirligi=0.5),
+    ),
+    "v6c_ogrenen_graf_sinyalsiz": dict(
+        aciklama="v6-C kontrol: öğrenen graf AÇIK ama ağırlık 0 — sinyal üretmek skoru değiştirmemeli",
+        cfg=dict(graf_ogrenen_enabled=True, graf_ogrenen_agirligi=0.0),
+    ),
     "v6_gurultulu_etiket": dict(
         aciklama="v6-A döngü, analistin %15'i yanılıyor — gürültülü etikete dayanıklılık",
         cfg=dict(

@@ -113,9 +113,32 @@ def tek_varyant(
             adwin_kesim=len(pipe.profile.adwin_cut),
             bayes_elenen_vaka=sum(len(v) for v in pipe.bayes_elenen.values()),
             **(pipe.anomali.etkinlik() if pipe.anomali is not None else {}),
+            **(pipe.analist.etkinlik() if pipe.analist is not None else {}),
+            **(pipe.yol.etkinlik() if pipe.yol is not None else {}),
+            **(pipe.graf_ogrenen.etkinlik() if pipe.graf_ogrenen is not None else {}),
         ),
+        # v6-B: sonraki adım isabeti. Model, biriktirdiği dizilerle ölçülür; eşik top-1 ≥ 2× taban
+        # (ön kayıt sapma 1). Kuyruk metriklerinden AYRI raporlanır — farklı bir soruyu cevaplar.
+        yol_isabet=(_yol_isabeti(pipe.yol) if pipe.yol is not None else None),
         sure_sn=round(time.perf_counter() - t0),
     )
+
+
+def _yol_isabeti(yol) -> Optional[dict]:
+    """Saldırı yolu modelinin sonraki adım isabeti, kendi biriktirdiği dizilerle.
+
+    Model bu dizilerle EĞİTİLDİ, dolayısıyla bu bir eğitim-üstü ölçümdür ve iyimserdir; rakam öyle
+    raporlanır. Asıl soru "taban oranını geçiyor mu" — onu bu ölçüm de cevaplayabilir, çünkü taban
+    ("her zaman en sık taktiği söyle") aynı dizilerden hesaplanıyor.
+    """
+    from ztp.attack_path import degerlendir
+
+    diziler = yol.diziler()
+    if not diziler:
+        return None
+    r = degerlendir(yol.model, diziler)
+    r["not_"] = "eğitim verisi üzerinde ölçüldü (iyimser); karşılaştırma tabanı aynı dizilerden"
+    return r
 
 
 def farklari_ekle(rows: List[dict]) -> List[dict]:
