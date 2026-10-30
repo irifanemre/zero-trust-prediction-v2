@@ -133,6 +133,15 @@ class TenantConfig:
     # Varsayılan kapalı — gerekçe `prediction_model.LogisticModel.fit` içinde; ikisi birlikte raporlanır.
     pred_sinif_agirligi: bool = False
 
+    # --- v6 katman A: analist geri bildirim döngüsü (`docs/sprint-v6-on-kayit.md`).
+    # 30 Ekim ablasyonu ölçtü: Bayes kapısı etiketsiz ortamda SIFIR eleme yapıyor, `belirsizlik_enabled`
+    # ise hiçbir yerden okunmuyordu. Bu üç bayrak döngüyü kapatır; hepsi varsayılanda kapalı (14.5).
+    geri_bildirim_dongusu: bool = False  # kuyruk → analist kararı → etiket → kapı + model
+    analist_gecikme_gun: int = 2  # etiket bu kadar gün SONRA görünür (sızıntıya karşı; gerçekte analist anında kapatmaz)
+    analist_hata_orani: float = 0.0  # etiketin bu oranı ters çevrilir — gürültülü etikete dayanıklılık ölçümü
+    pred_yeniden_egitim_gun: int = 0  # 0 → kapalı. Kaç günde bir model yeniden eğitilir
+    pred_min_yeni_etiket: int = 25  # son eğitimden beri bu kadar yeni etiket yoksa eğitilmez
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")
@@ -191,6 +200,16 @@ class TenantConfig:
             raise ValueError("anomali_pencere_gun 1 ile uzun pencere arasında olmalı")
         if self.anomali_yenileme_gun < 1:
             raise ValueError("anomali_yenileme_gun ≥ 1 olmalı")
+        if self.analist_gecikme_gun < 0:
+            raise ValueError("analist_gecikme_gun negatif olamaz")
+        if not 0 <= self.analist_hata_orani < 1:
+            raise ValueError("analist_hata_orani [0, 1) aralığında olmalı")
+        if self.pred_yeniden_egitim_gun < 0:
+            raise ValueError("pred_yeniden_egitim_gun negatif olamaz (0 = kapalı)")
+        if self.pred_min_yeni_etiket < 1:
+            raise ValueError("pred_min_yeni_etiket ≥ 1 olmalı")
+        if self.pred_yeniden_egitim_gun and not self.geri_bildirim_dongusu:
+            raise ValueError("pred_yeniden_egitim_gun > 0 için geri_bildirim_dongusu açık olmalı (etiket gelmeden eğitilemez)")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

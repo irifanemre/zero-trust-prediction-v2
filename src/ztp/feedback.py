@@ -39,6 +39,9 @@ class LabelStore:
             analist=analyst,
             not_=note,
             kurallar=sorted({h["kural"] for h in case["tespitler"]}),
+            # v6-A: Venn-Abers kalibrasyon kümesinin skoru. Etiketle BİRLİKTE saklanır, çünkü vaka
+            # dosyasından geriye okumak koşu sonrası dizin düzenine bağımlılık yaratır.
+            yuzdelik=case.get("yuzdelik"),
             ts=pd.Timestamp.utcnow().isoformat(),
             tetiklenen_aksiyon=FP_REASONS.get(reason) if reason else None,
         )

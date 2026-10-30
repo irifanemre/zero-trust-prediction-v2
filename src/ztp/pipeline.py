@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from ztp.analyst_loop import AnalistSimulatoru, KalibrasyonZamanlayicisi, bayes_besle, belirsizlik_sirasi
 from ztp.config import TenantConfig
 from ztp.data.dataset import Dataset
 from ztp.deception import UNATTRIBUTED_COLUMNS, HoneytokenRegistry
@@ -22,6 +23,7 @@ from ztp.drift import Adwin
 from ztp.features import extract_device_day, extract_features
 from ztp.feedback import LabelStore
 from ztp.gnn.bayesian_gate import BayesKapisi
+from ztp.gnn.conformal_eval import VA_MIN, VennAbersKalibrator
 from ztp.gnn.temporal_graph import TemporalHeteroGraph
 from ztp.gnn.tgn_model import TemporalGraphBaseline
 from ztp.graph.analysis import DeepGraphAnalyzer, GraphFindings
@@ -140,6 +142,22 @@ class ZeroTrustPredictionPipeline:
         )
         self.bayes = BayesKapisi(esik=self.cfg.bayes_kapi_esigi, min_gozlem=self.cfg.bayes_min_gozlem)
         self.bayes_elenen: Dict[pd.Timestamp, List[dict]] = {}
+        # v6 katman A: geri bildirim döngüsü. Kapalıyken simülatör KURULMAZ — etiket üretilmez, maliyet sıfır.
+        self.analist = (
+            AnalistSimulatoru(
+                d.ground_truth,
+                gecikme_gun=self.cfg.analist_gecikme_gun,
+                hata_orani=self.cfg.analist_hata_orani,
+            )
+            if self.cfg.geri_bildirim_dongusu
+            else None
+        )
+        self.kalibrasyon = KalibrasyonZamanlayicisi(
+            periyot_gun=self.cfg.pred_yeniden_egitim_gun, min_yeni_etiket=self.cfg.pred_min_yeni_etiket
+        )
+        self.bayes_ogrenilen = 0
+        self._va: Optional[VennAbersKalibrator] = None
+        self._va_etiket_n = 0
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
 
     def _ingest(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -524,6 +542,7 @@ class ZeroTrustPredictionPipeline:
         for sink in self.sinks:  # 17.6 SOAR / ticketing entegrasyonu — takma adlı vaka, gerçek kimlik gönderilmez
             for c in cases_today:
                 sink.emit({k: v for k, v in c.items() if k not in ("_sid", "rapor")})
+        self._geri_bildirim(day, cases_today)
         LOG.info(
             "%s: aktif=%d tespitli=%d kuyruk=%d kritik=%d askıda_kaynak=%s",
             day.date(),
@@ -533,6 +552,55 @@ class ZeroTrustPredictionPipeline:
             sum(1 for s in queue if results[s].critical),
             [k for k, v in dq.items() if v["durum"] == "askida"],
         )
+
+    # ------------------------------------------------------------------
+    def _belirsizlik(self, yuzdelik: float):
+        """Venn-Abers aralığı: "olasılık 0,30" yerine "0,18–0,41, n=140'a dayanıyor".
+
+        Kalibrasyon kümesi analist etiketlerinden kurulur (skor = o günkü yüzdelik, etiket = analist kararı).
+        Yeterli etiket yoksa `None` döner — uydurulmuş bir aralık, aralığın olmamasından kötüdür.
+        """
+        if not self.cfg.belirsizlik_enabled:
+            return None
+        etiket = [lab for lab in self.labels.labels if lab["karar"] in ("gercek_pozitif", "yanlis_pozitif")]
+        if len(etiket) < VA_MIN or len(etiket) == self._va_etiket_n:
+            if self._va is None or not self._va.hazir:
+                return None
+        if len(etiket) != self._va_etiket_n:  # etiket kümesi büyüdü → kalibratör yeniden kurulur
+            skorlar = [float(lab.get("yuzdelik", 0.0) or 0.0) for lab in etiket]
+            etiketler = [int(lab["karar"] == "gercek_pozitif") for lab in etiket]
+            self._va_etiket_n = len(etiket)
+            try:
+                self._va = VennAbersKalibrator().fit(skorlar, etiketler)
+            except ValueError:  # tek sınıf ya da yetersiz n — sessiz düşüş yok, aralık üretilmez
+                self._va = None
+        return self._va.aralik(float(yuzdelik)) if self._va is not None and self._va.hazir else None
+
+    # ------------------------------------------------------------------
+    def _geri_bildirim(self, day: pd.Timestamp, cases_today: List[dict]) -> None:
+        """v6-A: kuyruk → analist kararı → etiket → Bayes kapısı + periyodik yeniden eğitim.
+
+        Sıra önemlidir: önce BUGÜNÜN kuyruğu bekleyenlere yazılır, sonra OLGUNLAŞANLAR (gecikme kadar
+        önceki gün) etiketlenir. Böylece bugünün vakası bugün etiketlenemez — sistem kendi geleceğini
+        okuyamaz. Aktif öğrenme sırası (belirsizlik) hangi vakanın önce sorulacağını belirler; simülatör
+        hepsini kapattığı için sıra sonucu değiştirmez, ama gerçek analistte bütçe sınırlıdır.
+        """
+        if self.analist is None:
+            return
+        self.analist.kuyruga_al(day, belirsizlik_sirasi(cases_today))
+        yeni = self.analist.gun(day, self.labels)
+        if yeni:
+            self.bayes_ogrenilen += bayes_besle(self.bayes, yeni)
+        if self.kalibrasyon.gerekli_mi(day, len(self.labels.labels)):
+            rapor = self.train_prediction_model(min_rows=self.cfg.supervised_min_labels)
+            self.kalibrasyon.kaydet(day, len(self.labels.labels), rapor)
+            LOG.info(
+                "%s: model yeniden eğitimi — etiket=%d eğitildi=%s auprc=%s",
+                day.date(),
+                len(self.labels.labels),
+                rapor.get("egitildi"),
+                (rapor.get("holdout_model") or {}).get("auprc"),
+            )
 
     # ------------------------------------------------------------------
     def _counterfactual(self, sid: str, day: pd.Timestamp, r: RiskResult, gf: GraphFindings, s: dict) -> List[dict]:
@@ -664,6 +732,11 @@ class ZeroTrustPredictionPipeline:
             kanit_serileri={k: v for k, v in evid.items() if k in ("risk_serisi", "rejim", "yetki", "silence")},
             mudahale=tiered_response(combined, r.critical),
         )
+        # v6-A: Venn-Abers aralığı. v4'te bu bayrak eklenmiş ama hiçbir yerden OKUNMUYORDU — 30 Ekim
+        # ablasyonunda `belirsizlik` varyantının `tam` ile birebir aynı çıkmasının sebebi buydu.
+        # Aralık yalnız vakaya bilgi ekler; skora ve sıraya girmez (aktif öğrenme sırasını belirler).
+        if (aralik := self._belirsizlik(r.percentile)) is not None:
+            case["belirsizlik"] = aralik.ozet()
         if self.llm.kb:
             case["attack_baglami"] = [
                 dict(teknik=p.technique, ad=p.name, taktik=p.tactic, ozet=p.summary, onlem=p.mitigations, kaynak=p.source)
