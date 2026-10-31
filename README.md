@@ -465,6 +465,50 @@ bileşen. Buna rağmen varsayılan **henüz değiştirilmedi**: r4.2 ayar verisi
 
 Ayrıntı: [`docs/v7-ayar-taramasi.md`](docs/v7-ayar-taramasi.md).
 
+### r6.2'de yalnız graf çarpanı: en net aşırı uyum kanıtı
+
+41 bayrak içinde tutarlı değer ürettiğini düşündüğüm **tek bileşen** graf çarpanıydı: r4.2'de
+22/34 → **27/34**, recall@10 0,618 → 0,824. r6.2'de tek başına ölçüldü (4 pencere, 360 gün):
+
+| Ölçüt | Taban | Hepsi açık | **Yalnız graf** |
+|---|---|---|---|
+| **Yakalama** | **3/4** | **3/4** | **3/4** |
+| Yanlış pozitif | 538 | 1.114 | **1.295** |
+| precision@1 | 0,014 | 0,003 | **0,014** |
+| **Erkenlik medyanı** | 0 gün | 10 gün | **10 gün** |
+
+**Hipotez çürüdü.** "r6.2'de graf, zarar veren ADWIN'le birlikte açıldığı için sulanmıştı" diye
+düşünmüştüm. Graf tek başına da **tek bir ek insider getirmiyor** ve yanlış pozitifi 538'den
+1.295'e çıkarıyor — hepsi açıkken'den (1.114) bile fazla.
+
+Üç sonuç:
+
+1. **r4.2'nin +5'i r6.2'ye taşınmıyor.** Projedeki en net aşırı uyum kanıtı. Bir bileşenin
+   varsayılan açılması için iki farklı veride değer üretmesi gerekir; graf sağlamadı.
+   **Varsayılan değiştirilmedi.**
+2. **Bileşen etkileri veri setine bağlı.** ADWIN r4.2'de zararlıydı; r6.2'de yanlış alarmı bir
+   miktar azaltıyormuş. r4.2'de ölçülen bir etki başka veride tersine dönebiliyor.
+3. **Erkenlik kazancı grafa ait** — v4'te 0→10 gün görmüş ama kaynağını bilmiyorduk. Artık
+   biliyoruz. Ama **n=3**, tek senaryodan. Ayrıca precision@1 graf ile korunuyor (0,014), hepsi
+   açıkken 0,003'e düşüyordu — kuyruğun tepesini bozan graf değilmiş.
+
+Bu, **RQ3'ün** ("r4.2 iyileştirmeleri genelleniyor mu?") sayısal cevabıdır: **hayır**.
+
+Ayrıntı: [`docs/r62-graf-tek-basina.md`](docs/r62-graf-tek-basina.md).
+
+### Şema profilleyici: sessiz ölü kuralları yakalar
+
+r6.2'nin `http.csv` dosyasında `content` kolonu **yoktur** → `bytes_out` her web olayında sıfır →
+ağırlığı 8 olan `UEBA-0003` o koşuda **hiç tetiklenemez**. Aylarca fark edilmedi çünkü raporda
+masum bir "bu veride desen görülmedi" satırı olarak göründü.
+
+`schema_profiler.py` bunu **ilk koşuda** bulur; r4.2'de 0 uyarı, r1'de (tüm dosyalar başlıksız)
+yanlış alarm yok. Türev zinciri kayıtlı: `UEBA-0003` → `veri_hacmi_z` → `bytes_out` → `http.csv:content`.
+
+```
+PYTHONPATH=src python scripts/sema_profili.py --karsilastir .../r4.2 .../r6.2 .../r1
+```
+
 ## Lisans
 
 Apache-2.0 — bkz. [LICENSE](LICENSE).
