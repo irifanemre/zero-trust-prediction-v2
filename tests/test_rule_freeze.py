@@ -9,7 +9,8 @@ import json
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
+V5 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
 V4 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v4.json"
 V3 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v3.json"
 V2 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v2.json"
@@ -22,8 +23,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 22  # v5: kural kümesi v2'den beri aynı, değişen yalnız yetenekler
-    assert m["etiket"] == "kurallar-donduruldu-v5"
+    assert len(m["degerler"]["kurallar"]) == 23  # v6: UEBA-0022 eklendi (v2'den beri ilk kural değişikliği)
+    assert m["etiket"] == "kurallar-donduruldu-v6"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -55,7 +56,7 @@ def test_v5_kurallari_v4_ile_ayni():
     lojistik modelde sınıf ağırlığı anahtarı. Hiçbir KURAL, eşik ya da ağırlık değişmedi; dondurulan dosya
     kümesine bir dosya EKLENDİ (anomali kanalı skora girdiği için donmak zorunda).
     """
-    v4, v5 = (json.loads(p.read_text(encoding="utf-8")) for p in (V4, MANIFEST))
+    v4, v5 = (json.loads(p.read_text(encoding="utf-8")) for p in (V4, V5))
     assert v4["degerler"]["kurallar"] == v5["degerler"]["kurallar"]
     eklenen = set(v5["dosyalar"]) - set(v4["dosyalar"])
     assert eklenen == {"src/ztp/unsupervised.py"}
@@ -103,3 +104,29 @@ def test_diff_reports_changed_threshold():
     changed = json.loads(json.dumps(m))
     changed["degerler"]["kurallar"]["UEBA-0003"]["kosullar"] = ["veri_hacmi_anomali_z > 3.0"]
     assert diff_manifest(m, changed) == ["değer: kurallar"]
+
+
+def test_v6_ilk_kural_eklemesi_ve_golge_modda():
+    """v6, v2'den beri İLK kural eklemesidir: UEBA-0022 (sızıntı kanalı ani artış).
+
+    Kural gölge modda doğdu (13.6) — yani dondurma kümesine girdi ama kuyruğa vaka gönderemez.
+    Ayrıca sızıntı kanalı sayacı havuzdan ayrıldığı için `features.py` ve `profile.py` değişti.
+    """
+    v5, v6 = (json.loads(p.read_text(encoding="utf-8")) for p in (V5, MANIFEST))
+    eklenen = set(v6["degerler"]["kurallar"]) - set(v5["degerler"]["kurallar"])
+    assert eklenen == {"UEBA-0022"}
+    assert v6["degerler"]["kurallar"]["UEBA-0022"]["durum"] == "golge-modda"
+    # havuzlanmış kural DEĞİŞMEDİ: v6-D yeni bir sayaç ekler, eskisini bozmaz
+    assert v5["degerler"]["kurallar"]["UEBA-0021"] == v6["degerler"]["kurallar"]["UEBA-0021"]
+    degisen = {f for f in v5["dosyalar"] if v6["dosyalar"].get(f) != v5["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py", "src/ztp/features.py", "src/ztp/profile.py", "src/ztp/scoring.py"}
+
+
+def test_v6_bayraklari_varsayilanda_kapali():
+    """Sprint v6'nın üç katmanı da ölçüldü ve eşiğini geçemedi; varsayılanda kapalı kalırlar."""
+    from ztp.config import TenantConfig
+
+    c = TenantConfig()
+    assert c.geri_bildirim_dongusu is False  # katman A
+    assert c.saldiri_yolu_enabled is False and c.saldiri_yolu_agirligi == 0.0  # katman B
+    assert c.graf_ogrenen_enabled is False and c.graf_ogrenen_agirligi == 0.0  # katman C

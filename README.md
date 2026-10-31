@@ -412,6 +412,30 @@ o vaka artık kanıt değil, ayar kümesinin parçası.
 
 Ayrıntı: [`docs/v6d-sizinti-kanali-olcumu.md`](docs/v6d-sizinti-kanali-olcumu.md).
 
+### Sprint v6 karnesi: üç yeni katman, üçü de eşiğini geçemedi
+
+Üç katman (analist geri bildirim döngüsü, saldırı yolu tahmini, öğrenen graf gömme) aynı sprintte
+geliştirildi ve **ayrı ayrı** ölçüldü. Başarı eşikleri ölçümden **önce** yazılmıştı:
+
+| Katman | Eşik | Ölçülen | |
+|---|---|---|---|
+| **A** geri bildirim döngüsü | kapsamayı değiştirmez (±1) | 22/34 → **18/34** | ✘ |
+| **B** saldırı yolu tahmini | top-1 ≥ 2× taban | **1,33×** | ✘ |
+| **C** öğrenen graf gömme | > 27/34 | **22/34** | ✘ |
+
+İki sözleşme testi geçti: B ve C, ağırlıkları 0 iken kuyruğu **birebir** değiştirmedi. Kod doğru;
+başarısız olan fikirlerdi.
+
+**41 opsiyonel bayraktan ölçülmüş şekilde değer üreten tek bileşen graf çarpanıdır** (+5 insider,
+recall@10 0,618 → 0,824). Diğerleri ya nötr ya da (ADWIN) zararlı.
+
+Bu, projenin merkezî iddiasının kendi üzerinde işlemesidir: **ölçülmeden açılmaz.** Üç katman da
+yazıldı, test edildi, ölçüldü ve **varsayılanda kapalı kaldı**. Marjinal getirinin sıfıra yakın
+olduğu ölçüldüğü için sıradaki iş yeni bileşen eklemek değil, var olanı ayarlamaktır.
+
+Ayrıntı: [`docs/sprint-v6-sonuclar.md`](docs/sprint-v6-sonuclar.md) ·
+ön kayıt ve üç sapma: [`docs/sprint-v6-on-kayit.md`](docs/sprint-v6-on-kayit.md).
+
 ## Lisans
 
 Apache-2.0 — bkz. [LICENSE](LICENSE).
