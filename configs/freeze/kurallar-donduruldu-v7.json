@@ -35,7 +35,7 @@
     "src/ztp/graph/analysis.py": "e8284d04d83da2e55638a628047ded913981ae79466399fde4a5ed5867d624fb",
     "src/ztp/prediction.py": "d00c74f6ece7580ec919ffbd31d1c413abe36943089185ff4d48700c77ddac7c",
     "src/ztp/prediction_model.py": "6ce105edad42a34f560f0d385066e6bfa0b50248ebbbe7c4182f1b0014176cb4",
-    "src/ztp/profile.py": "8486669f2cfcb252c8ad55c4774acdee8ac4e0f41557bf04f067418024975fdc",
+    "src/ztp/profile.py": "1f8b8cb9b38a21df37c61daeb74d9c36bee81daca3573a691fbe07dcb9ce0afd",
     "src/ztp/quality.py": "ca8399b49957d8db65187f370bf884817523c456f6c30a5bc8d3abae2d5c616a",
     "src/ztp/scoring.py": "6a70d91e8623979e02812586f726fe7a85d52a60c1e4d924d01ae723fd4f410a",
     "src/ztp/stats.py": "2cf1791c088af0a5f3b814498c6e19ed48143963f5af6390a6e26b8aafd703b1",

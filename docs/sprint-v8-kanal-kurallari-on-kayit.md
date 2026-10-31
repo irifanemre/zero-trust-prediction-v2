@@ -94,3 +94,46 @@ kapalı olduğu ve e-posta/webmail'in birincil kanal olduğu bir ortamda ortaya 
 
 Bu, kuralları yazmamak için sebep değildir: olmayan kanala kural yazmamak, kanal açıldığında
 **kör kalmak** demektir. Ama "ölçtük, işe yarıyor" denemeyeceği baştan kayda geçirilir.
+
+## Sapma kaydı
+
+### Sapma 4 — UEBA-0023'ün taban değeri ölçümden SONRA düzeltildi
+
+**31 Ekim, r4.2 ölçümünden SONRA.** Kural **0 kez** tetiklendi (`sinanmadi`). Bu "değer üretmedi"
+değil, **çalışamadı** demekti.
+
+Teşhis: `eposta_dis_z` hesabındaki robust-z taban değeri `bytes_out`'un tabanından (5 MB)
+kopyalanmıştı. O değer **tüm kanalların toplam hacmi** için doğrudur; tek bir kanal için 50 kat
+fazladır.
+
+Ölçülen (r4.2, kullanıcı-gün başına dış e-posta hacmi):
+
+| | |
+|---|---|
+| Medyan | 0,10 MB |
+| %95'lik dilim | 0,33 MB |
+| **Veri setindeki en büyük gün** | **0,99 MB** |
+| 5 MB tabanla z=3,5 için gereken fazlalık | **17,5 MB** |
+
+Eşik, verinin tamamının **18 katı** uzaktaydı. Hiçbir gün tetikleyemezdi.
+
+**Yeni değer 50 KB**, gerekçesi veriden değil ÖLÇEKTEN türetildi: medyan e-posta 28 KB, dolayısıyla
+50 KB ≈ iki e-posta. "İki e-postadan küçük bir fark anlamlı değildir." Yeni eşik, z=3,5 için
+medyan + 175 KB = 277 KB istiyor; bu, gözlenen dağılımın %95'lik dilimi (329 KB) ile maksimumu
+(990 KB) arasına düşüyor — yani üst kuyruğa, ötesine değil.
+
+**Sapma 3'ten farkı — ve okuyucunun yargılaması için:**
+
+Sapma 3'te bir **karar eşiğini** tek bir test vakası onu geçemedikten sonra gevşetmiştim; o vaka
+kanıt olmaktan çıktı. Burada değişen bir karar eşiği değil, bir **ölçek sabiti**; ve değeri
+**hacim dağılımından** türetildi, **hangi kullanıcıların insider olduğundan** değil. Etiketlere
+bakılmadı.
+
+Yine de bu bir sapmadır ve kaydedilir: sonucu gördükten sonra koda dokunuldu. Başarı eşikleri
+(kapsama düşmez, vaka artışı ≤%15, precision ≥%25) değiştirilmedi ve yeniden ölçülecektir.
+
+### UEBA-0024 — düzeltme gerekmedi
+
+105 kez tetiklendi, 54 yanlış vakaya katıldı, **hiçbir gerçek vakaya katılmadı** (precision 0,0).
+Kural çalışıyor; r4.2'de webmail kullanımı insider'larla ilişkili değil. Bu beklenen sonuçtur
+(ön kayıt beklenti 2): r4.2'nin 34 senaryosunun 31'i USB'ye bağımlı. **Gölgede kalır.**

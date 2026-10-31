@@ -17,6 +17,14 @@ from ztp.deception import KIND_ACCOUNT, KIND_DEVICE, KIND_RESOURCE
 from ztp.features import DEVICE_DAY_COLUMNS, FEATURE_FLOOR, NUM_FEATURES, SEASONAL_FEATURES
 from ztp.peers import PeerGroups
 from ztp.schema import DAY, SENSITIVE_APPS
+
+# v8 sapma 4: dış e-posta hacminin robust-z TABAN değeri. İlk sürümde `bytes_out`'un tabanı (5 MB)
+# kopyalanmıştı; o, TÜM kanalların toplam hacmi için doğrudur ama tek bir kanal için 50 kat fazladır.
+# Ölçüldü (r4.2): kullanıcı-gün başına dış e-posta medyanı 0,10 MB, %95'lik dilim 0,33 MB, veri
+# setindeki en büyük gün 0,99 MB. 5 MB tabanla z=3,5 için 17,5 MB fazlalık gerekiyordu — verinin
+# tamamının 18 katı. Kural hiç tetiklenemezdi.
+# 50 KB ≈ iki e-posta (medyan e-posta 28 KB): "iki e-postadan küçük bir fark anlamlı değildir".
+EPOSTA_TABAN = 50_000
 from ztp.stats import (
     CircularStats,
     age_weights,
@@ -545,7 +553,9 @@ class ProfileEngine:
         s["eposta_dis_sayi"] = float(row.get("ext_email_count", 0) or 0)
         s["eposta_ek_sayisi"] = float(row.get("ext_email_attachments", 0) or 0)
         if eposta_taban is not None and sid in eposta_taban.index and profil_gun >= 30:
-            s["eposta_dis_z"] = robust_z(e_bayt, float(eposta_taban.loc[sid, "med"]), float(eposta_taban.loc[sid, "mad"]), 5e6)
+            s["eposta_dis_z"] = robust_z(
+                e_bayt, float(eposta_taban.loc[sid, "med"]), float(eposta_taban.loc[sid, "mad"]), EPOSTA_TABAN
+            )
         else:
             s["eposta_dis_z"] = 0.0
         if s["eposta_dis_z"] > 2.0:
