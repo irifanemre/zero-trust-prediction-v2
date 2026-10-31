@@ -9,7 +9,8 @@ import json
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
+V7 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
 V6 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
 V5 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
 V4 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v4.json"
@@ -24,8 +25,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 25  # v7: UEBA-0023 (dış e-posta) ve UEBA-0024 (webmail)
-    assert m["etiket"] == "kurallar-donduruldu-v7"
+    assert len(m["degerler"]["kurallar"]) == 25  # v8 kural EKLEMEZ: v7'nin 25 kuralı aynı
+    assert m["etiket"] == "kurallar-donduruldu-v8"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -140,7 +141,7 @@ def test_v7_kanal_kurallari_golge_modda():
     değerinin CERT'te ölçülemeyeceğini önceden yazdı: r4.2'nin 34 senaryosunun 31'i USB'ye bağımlı.
     Kuralları yine de yazmanın sebebi, kanal açıldığında kör kalmamaktır.
     """
-    v6, v7 = (json.loads(p.read_text(encoding="utf-8")) for p in (V6, MANIFEST))
+    v6, v7 = (json.loads(p.read_text(encoding="utf-8")) for p in (V6, V7))
     eklenen = set(v7["degerler"]["kurallar"]) - set(v6["degerler"]["kurallar"])
     assert eklenen == {"UEBA-0023", "UEBA-0024"}
     for rid in sorted(eklenen):
@@ -149,6 +150,29 @@ def test_v7_kanal_kurallari_golge_modda():
     # mevcut kurallar DEĞİŞMEDİ: v8 yeni kanal ekler, eskisini bozmaz
     for rid in v6["degerler"]["kurallar"]:
         assert v6["degerler"]["kurallar"][rid] == v7["degerler"]["kurallar"][rid]
+
+
+def test_v8_hicbir_kural_degismedi_yalniz_olcum_durustlesti():
+    """v8 bir TESPİT sürümü değil, bir ÖLÇÜM sürümüdür (`docs/faz-a2-on-kayit.md`).
+
+    Hiçbir kural, eşik ya da ağırlık değişmedi. Değişen: şemadan ölü kural artık "bu veride desen
+    görülmedi" demek yerine `sinanamaz` sayılıyor ve beklenen tespitlerinin hepsi ölü olan senaryo
+    kapsama PAYDASINDAN düşüyor. Dondurma kümesine iki dosya eklendi çünkü ikisi de bir kuralın
+    ölü/canlı sayılmasına karar veriyor.
+    """
+    v7, v8 = (json.loads(p.read_text(encoding="utf-8")) for p in (V7, MANIFEST))
+    assert v7["degerler"]["kurallar"] == v8["degerler"]["kurallar"]
+    eklenen = set(v8["dosyalar"]) - set(v7["dosyalar"])
+    assert eklenen == {"src/ztp/availability.py", "src/ztp/schema_profiler.py"}
+    degisen = {f for f in v7["dosyalar"] if v8["dosyalar"].get(f) != v7["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py", "src/ztp/detection/engine.py"}
+
+
+def test_v8_bayragi_varsayilanda_kapali():
+    """Sözleşme: şema farkındalığı kapalıyken ölçüm birebir v7'dir (ön kayıt ölçütü 1)."""
+    from ztp.config import TenantConfig
+
+    assert TenantConfig().sema_farkindaligi is False
 
 
 def test_v7_eposta_webmail_sinyalleri_uretiliyor():

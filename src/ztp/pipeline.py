@@ -15,6 +15,7 @@ import pandas as pd
 
 from ztp.analyst_loop import AnalistSimulatoru, KalibrasyonZamanlayicisi, bayes_besle, belirsizlik_sirasi
 from ztp.attack_path import SaldiriYoluTahmincisi, ilerleme, model_kur, taktik_dizisi
+from ztp.availability import MevcudiyetHaritasi, kural_mevcudiyeti
 from ztp.config import TenantConfig
 from ztp.data.dataset import Dataset
 from ztp.deception import UNATTRIBUTED_COLUMNS, HoneytokenRegistry
@@ -43,6 +44,7 @@ from ztp.reporting.llm import LLMReporter
 from ztp.reporting.template import TemplateReporter, describe_hit
 from ztp.response import tiered_response
 from ztp.schema import DAY, EVENT_COLUMNS, to_utc_naive
+from ztp.schema_profiler import profille
 from ztp.scoring import RiskResult, RiskScorer
 from ztp.state import StateStore, hits_from_records, hits_to_records
 from ztp.unsupervised import AnomaliKanali
@@ -92,7 +94,8 @@ class ZeroTrustPredictionPipeline:
         self.pseud = Pseudonymizer(cfg.pseudonym_secret, self.out / "audit.jsonl")
         self.labels = LabelStore(self.out / "labels.json")
         self.kg = KnowledgeGraph()
-        self.engine = DetectionEngine(cfg, catalog, describe=describe_hit)
+        self.mevcudiyet = self._sema_mevcudiyeti()
+        self.engine = DetectionEngine(cfg, catalog, describe=describe_hit, mevcudiyet=self.mevcudiyet)
         self.llm = LLMReporter(cfg)
         self.cases: List[dict] = []
         self.dq_last: dict = {}
@@ -104,6 +107,21 @@ class ZeroTrustPredictionPipeline:
         self._init_components()
 
     # ------------------------------------------------------------------ kurulum
+    def _sema_mevcudiyeti(self) -> Optional[MevcudiyetHaritasi]:
+        """Faz A-2: hangi kural bu veri setinde SINANABİLİR. Bayrak kapalıysa profilleme bile yapılmaz."""
+        if not getattr(self.cfg, "sema_farkindaligi", False):
+            return None
+        harita = profille(getattr(self.data, "name", "?"), events=self.data.events)
+        m = kural_mevcudiyeti(self.catalog, harita)
+        if m.olu:
+            LOG.warning("Şema farkındalığı: %d kural bu veri setinde sınanamaz — %s", len(m.olu), sorted(m.olu))
+        for u in harita.uyarilar:
+            LOG.warning("Şema uyarısı: %s", u)
+        (self.out / "sema-profili.json").write_text(
+            json.dumps(dict(sema=harita.ozet(), mevcudiyet=m.ozet()), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return m
+
     def _init_components(self) -> None:
         d = self.data
         for c in ("hire_date", "resignation_notice_date", "resignation_date", "role_change_date", "privilege_grant_date"):
@@ -172,7 +190,7 @@ class ZeroTrustPredictionPipeline:
             else None
         )
         self.graf_ogrenen = self._graf_ogrenen_kur() if self.cfg.graf_ogrenen_enabled else None
-        self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
+        self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog, mevcudiyet=self.mevcudiyet)
         # Denetim kancası: her gün üretilen TÜM sinyaller (skorlamadan önce) dışarı verilir.
         # Karar yoluna dokunmaz; `scripts/esik_ulasilabilirlik.py` bununla sinyal aralıklarını çıkarır.
         self.sinyal_gozlemci: Optional[Callable[[pd.Timestamp, Dict[str, dict]], None]] = None
@@ -872,6 +890,14 @@ class ZeroTrustPredictionPipeline:
         print(
             f"Kural sağlığı: devre dışı={list(summ['kural_sagligi']['devre_disi'])} 30g tetiklenmeyen={summ['kural_sagligi']['gun30_tetiklenmeyen']} DQ askıda atlanan={summ['kural_sagligi']['dq_askida_atlanan']}"
         )
+        if self.engine.sema_olu:  # Faz A-2: susturulmuş değil, SINANAMAZ — ölçüm bunu bilmek zorunda
+            print(f"Şemadan sınanamayan kurallar: {sorted(self.engine.sema_olu)}")
+            if summ["kapsama"]["olculemez"]:
+                print(
+                    f"  → ölçülemeyen senaryo: {summ['kapsama']['olculemez']}  |  "
+                    f"ölçülebilir kapsama: {summ['kapsama']['tespit']}/{summ['kapsama']['olculebilir']} "
+                    f"(oran {summ['kapsama']['olculebilir_oran']})"
+                )
         print(f"Bileşen katkısı (skor payı): {summ['bilesen_katkisi']}")
         cal = summ.get("tahmin_kalibrasyonu")
         if cal:

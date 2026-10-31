@@ -156,6 +156,14 @@ class TenantConfig:
     graf_ogrenen_egitim_gun: int = 14  # kaç günde bir yeniden eğitilir (geçmiş pencereyle)
     graf_ogrenen_agirligi: float = 0.0  # raw += agirlik · sasirticilik · 10. 0 → skora girmez
 
+    # --- Faz A-2: şema farkındalığı. Açıkken, koşullarındaki TÜM veri bağımlı sinyaller bu veri
+    # setinde üretilemeyen kural değerlendirilmez ve `sinanamaz — şema` diye SAYILIR; beklenen
+    # tespitlerinin hepsi böyle olan senaryo `ÖLÇÜLEMEDİ` işaretlenir ve kapsama oranının
+    # PAYDASINDAN düşer. Skoru, eşiği, sıralamayı değiştirmez — yalnız ölçümün dürüstlüğünü.
+    # r6.2'de `UEBA-0003` (ağırlık 8) `bytes_out = 0` yüzünden ölüydü ve rapor onu "bu veride desen
+    # görülmedi" diye gösterdi; o cümle 12 kaçan insider'ın birini açıklamayı aylarca geciktirdi.
+    sema_farkindaligi: bool = False
+
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
             raise ValueError("alarm_budget_per_day ≥ 1 olmalı (analist kapasitesi)")

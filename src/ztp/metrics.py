@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 import pandas as pd
 
+from ztp.availability import MevcudiyetHaritasi, senaryo_olculebilirligi
 from ztp.config import TenantConfig
 from ztp.detection.engine import DetectionEngine
 from ztp.feedback import LabelStore
@@ -60,8 +61,16 @@ class HealthMonitor:
 
 
 class MetricsCollector:
-    def __init__(self, cfg: TenantConfig, ground_truth: List[dict], catalog: List[dict]):
+    def __init__(
+        self,
+        cfg: TenantConfig,
+        ground_truth: List[dict],
+        catalog: List[dict],
+        mevcudiyet: Optional["MevcudiyetHaritasi"] = None,
+    ):
         self.cfg, self.gt, self.catalog = cfg, ground_truth, catalog
+        # Faz A-2: bayrak kapalıysa harita okunmaz — kapalı hâl birebir eski rapor.
+        self.mevcudiyet = mevcudiyet if getattr(cfg, "sema_farkindaligi", False) else None
         self.daily: List[dict] = []
         self.first_alert: Dict[str, Tuple[pd.Timestamp, List[str]]] = {}
         self.alerts_by_sid: Dict[str, List[Tuple[pd.Timestamp, Set[str]]]] = defaultdict(list)
@@ -293,7 +302,15 @@ class MetricsCollector:
             partial = ""
             if self.eval_range and (w0 + 7 * DAY < self.eval_range[0] or w1 - 7 * DAY > self.eval_range[1]):
                 partial = " [kısmi pencere: senaryonun bir kısmı değerlendirme dönemi dışında]"
-            if expected & all_fired and not hit_exp:
+            # Faz A-2: beklenen tespitin şemadan ölü olması "kaçırıldı" DEĞİLDİR. Sistem bakamadığı
+            # bir şeyi kaçırmış sayılmaz; o senaryo paydadan düşer ve ayrıca raporlanır.
+            olculebilirlik = senaryo_olculebilirligi(expected, self.mevcudiyet) if self.mevcudiyet else "olculebilir"
+            olu = sorted(b for b in expected if self.mevcudiyet and not self.mevcudiyet.degerlendirilebilir(b))
+            if olculebilirlik == "kismi":
+                partial += f" [şemadan ölü beklenen tespit: {', '.join(olu)}]"
+            if olculebilirlik == "olculemez" and not hit_exp:
+                sonuc = f"ÖLÇÜLEMEDİ (beklenen tespitlerin hepsi şemadan ölü: {', '.join(olu)})"
+            elif expected & all_fired and not hit_exp:
                 sonuc = "BÜTÇE DIŞI (beklenen tespit tetiklendi, kuyruğa girmedi)"
                 earliness = int((inc - first_hit).days) if first_hit is not None else earliness
             elif not alerts:
@@ -316,6 +333,7 @@ class MetricsCollector:
                     olay_tarihi=str(inc.date()),
                     erkenlik_gun=earliness,
                     sonuc=sonuc,
+                    olculebilirlik=olculebilirlik,
                     bayraklar=sorted(self.flags.get(sid, [])),
                 )
             )
@@ -370,6 +388,10 @@ class MetricsCollector:
                 durum, neden = "dogrulandi", ""
             elif hits:
                 durum, neden = "kismen", "tetiklendi, hiç gerçek vakaya katılmadı"
+            elif rid in getattr(engine, "sema_olu", {}):
+                # Faz A-2: `sinanmadi` DEĞİL `sinanamaz`. Birincisi "desen yok" der, ikincisi
+                # "bakılamadı" — karıştırıldığında eksik telemetri, temiz veri gibi görünür.
+                durum, neden = "sinanamaz", f"şema: {engine.sema_olu[rid]}"
             else:
                 durum = "sinanmadi"
                 neden = (
@@ -407,6 +429,8 @@ class MetricsCollector:
             dogrulandi=c["dogrulandi"],
             kismen=c["kismen"],
             sinanmadi=c["sinanmadi"],
+            sinanamaz_sema=c["sinanamaz"],  # Faz A-2: bakılamadı — "desen görülmedi" ile aynı kefeye girmez
+            sema_olu_kural=sorted(r["kural"] for r in matrix if r["dogrulama"] == "sinanamaz"),
             sinanmama_nedeni=dict(nedenler),
         )
 
@@ -433,6 +457,10 @@ class MetricsCollector:
     ) -> dict:
         cov = self.coverage()
         positives = [c for c in cov if "negatif" not in c["senaryo"].lower()]
+        # Faz A-2: ölçülemeyen senaryo paydadan düşer. "22/34" ile "22/31 (+3 ölçülemedi)" aynı
+        # sayıyı farklı iki gerçeklikle anlatır; ikincisi doğru olanıdır.
+        olculemez = [c for c in positives if c["sonuc"].startswith("ÖLÇÜLEMEDİ")]
+        olculebilir = [c for c in positives if c not in olculemez]
         detected = sum(1 for c in positives if c["sonuc"].startswith("GEÇTİ"))
         stale = [
             r["id"]
@@ -448,6 +476,10 @@ class MetricsCollector:
                 senaryo=len(positives),
                 tespit=detected,
                 oran=round(detected / len(positives), 2) if positives else None,
+                # Faz A-2: bayrak kapalıyken `olculemez = 0` ve bu üç alan eski oranı tekrar eder.
+                olculebilir=len(olculebilir),
+                olculemez=[c["senaryo"] for c in olculemez],
+                olculebilir_oran=round(detected / len(olculebilir), 2) if olculebilir else None,
                 detay=cov,
             ),
             erkenlik_gun={c["senaryo"]: c["erkenlik_gun"] for c in positives},

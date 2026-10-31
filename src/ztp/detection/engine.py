@@ -7,7 +7,7 @@ import logging
 import math
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence
 
 import pandas as pd
 
@@ -15,6 +15,9 @@ from ztp.config import TenantConfig
 from ztp.detection.expr import SafeExpr, _Signals
 from ztp.schema import DAY, SOURCE_ALIAS
 from ztp.stats import EPS, sigmoid
+
+if TYPE_CHECKING:  # yalnız tip için: motor mevcudiyet modülüne çalışma zamanında bağımlı değildir
+    from ztp.availability import MevcudiyetHaritasi
 
 LOG = logging.getLogger(__name__)
 
@@ -63,15 +66,26 @@ class Hit:
 
 
 class DetectionEngine:
-    def __init__(self, cfg: TenantConfig, catalog: List[dict], describe: Optional[Callable[["Hit", dict], str]] = None):
+    def __init__(
+        self,
+        cfg: TenantConfig,
+        catalog: List[dict],
+        describe: Optional[Callable[["Hit", dict], str]] = None,
+        mevcudiyet: Optional["MevcudiyetHaritasi"] = None,
+    ):
         self.describe = (
             describe  # tespit anındaki bağlamla açıklama üretir (raporlama katmanı enjekte eder; motor rapora bağımlı değildir)
         )
         self.cfg = cfg
         self.rules: List[dict] = []
         self.disabled: Dict[str, str] = {}
+        # Faz A-2: şemadan ölü kurallar. `disabled`'dan AYRI tutulur çünkü sebep farklıdır ve rapor
+        # ikisini karıştırmamalı: "kaynak yok" müşteri kurulumudur, "şema ölü" veri setinin kendisidir.
+        self.sema_olu: Dict[str, str] = {}
         self.errors: Counter = Counter()
         self.compiled: Dict[str, List[SafeExpr]] = {}
+        # Bayrak kapalıysa harita hiç okunmaz — kapalı hâl birebir eski davranış (ön kayıt ölçütü 1).
+        self.mevcudiyet = mevcudiyet if getattr(cfg, "sema_farkindaligi", False) else None
         avail = set(cfg.available_sources) | {"_internal"}
         for r in catalog:
             r = dict(r)
@@ -84,6 +98,12 @@ class DetectionEngine:
             missing = [k for k in r["veri_kaynaklari"] if SOURCE_ALIAS.get(k, k) not in avail]
             if missing:
                 self.disabled[r["id"]] = f"kaynak yok: {missing} (11.1)"
+                continue
+            if self.mevcudiyet is not None and not self.mevcudiyet.degerlendirilebilir(r["id"]):
+                # Kuralı SUSTURMUYORUZ, SINANAMAZ ilan ediyoruz: koşulu her gün sahte sıfırlarla
+                # değerlendirmek "desen görülmedi" sanısı üretir — r6.2'de tam bu oldu.
+                self.sema_olu[r["id"]] = self.mevcudiyet.neden(r["id"])
+                LOG.warning("%s bu veri setinde sınanamaz — %s", r["id"], self.sema_olu[r["id"]])
                 continue
             self.compiled[r["id"]] = [SafeExpr(c) for c in r["mantik"]["kosullar"]]
             self.rules.append(r)

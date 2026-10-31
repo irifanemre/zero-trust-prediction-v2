@@ -44,9 +44,13 @@ MIN_TEKIL = 2
 TUREV_BAGIMLILIK: Dict[str, Tuple[str, ...]] = {
     "bytes_out": ("bytes_out",),
     "usb_count": ("source", "action"),
-    "files_accessed": ("resource",),
-    "distinct_resources": ("resource",),
-    "sensitive_access_count": ("resource",),
+    # DİKKAT: `files_accessed` dosya olaylarını SAYAR (`source == "file_server"`), kaynak adına
+    # bakmaz — `features.py:69`. İlk sürümde `resource`'a bağlanmıştı ve r4.2'de `UEBA-0007`'nin
+    # dosya sinyallerini yanlışlıkla "şemadan ölü" gösteriyordu; CERT dosya adı saklamaz (20.1 veri
+    # minimizasyonu) ama dosya olayı vardır ve sayılır. Zincirin kendisi de denetlenmek zorunda.
+    "files_accessed": ("source",),
+    "distinct_resources": ("resource",),  # nunique(resource) — gerçekten kaynak adına bağlı
+    "sensitive_access_count": ("resource",),  # kritik varlık listesiyle eşleşme — kaynak adı şart
     "proc_count": ("source",),
     "recon_process_count": ("process", "cmdline"),
     "distinct_apps_n": ("app",),
@@ -58,6 +62,8 @@ TUREV_BAGIMLILIK: Dict[str, Tuple[str, ...]] = {
     "logon_count": ("source", "action"),
     "offhours_logon_count": ("time", "source"),
     "failed_logon_count": ("outcome",),
+    "devices": ("source",),  # cihaz kimliği: yeni/paylaşılan/başkasının cihazı sinyalleri
+    "logon_hour": ("time",),  # dairesel saat sapması
 }
 
 # CERT ham dosyalarında bir kolonun yokluğunun hangi olay alanını sakatladığı.

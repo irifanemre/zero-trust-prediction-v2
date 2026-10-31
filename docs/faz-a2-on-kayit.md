@@ -54,3 +54,59 @@ Bu faz **yakalama artırmayı hedeflemiyor**; raporun dürüstlüğünü artır�
 
 Üçüncü beklenti bilinçli: bir fazın değeri her zaman yakalama artışı olmak zorunda değildir.
 Yanlış bir rakama güvenmek, düşük bir rakamı bilmekten daha pahalıdır.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (31 Ekim 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Ölçüm sırasında planın dışına çıkılan her nokta burada.
+Sonuçlar: `docs/faz-a2-sonuclar.md`.
+
+## Sapma 1 — ölçüt 1 ve 2 sentetik veride ölçüldü, r4.2'de değil
+
+Plan "r4.2'de birebir aynı" diyordu. Ölçüm, r4.2'nin **şema durumunu** sentetik veride yeniden
+üreterek yapıldı (`outcome` sabit, `process`/`cmdline` boş) ve iki koşu bire bir karşılaştırıldı:
+risk skorları, kuyruk ve kural tetiklenme sayıları birebir aynı.
+
+**Gerekçe:** r4.2'de tam ablasyon 11 varyant × ~40 dk. Sentetik koşu aynı sözleşmeyi (skor
+değişmez, rapor değişir) dakikalar içinde ve **sürekli** sınar — testin içinde, bir kerelik koşuda
+değil. **Zayıflığı:** r4.2'nin kendi sayıları (22/34, 1.939 vaka) bu fazda yeniden ölçülmedi;
+dayanak, dondurma kontrolü + bayrak kapalıyken kod yolunun hiç çalışmaması.
+
+## Sapma 2 — ölçüt 2 bir YANLIŞ POZİTİF buldu ve harita düzeltildi
+
+Ölçüt 2 ilk koşuda **kaldı**: bir kullanıcının skoru 1,26 ↔ 189,08 oynadı. Sebep mekanizmanın
+kendi haritasındaki iki hatalı bağımlılıktı:
+
+| Sinyal/özellik | Yanlış | Doğru |
+|---|---|---|
+| `kesif_genisligi_akran_kati` | `recon_process_count` | `distinct_resources` (`profile.py:607`) |
+| `files_accessed` | `resource` | `source` (`features.py:69`) |
+
+Harita düzeltildi, ölçüt 2 geçti. Düzeltme **ölçüm görüldükten sonra** yapıldı — ama düzeltmenin
+dayanağı üretim kodudur, etiket ya da sonuç değil: `profile.py:607` ve `features.py:69` ne
+kullanıyorsa harita onu yazıyor. Yine de sıra bu: önce ölçüm kaldı, sonra kod değişti. Kayda
+geçiyor. Aynı hatanın tekrarına karşı `test_turev_zinciri_uretim_koduyla_tutarli` eklendi.
+
+## Sapma 3 — ÖLÇÜT 3 KALDI, mekanizma düzeltilmedi
+
+r6.2'de `UEBA-0003` ölü **raporlanmadı**: `bytes_out` üç kanaldan beslenir ve r6.2'de yalnız web
+kanalında boştur (`email.csv:size` ve `file.csv:content` dolu), dolayısıyla alan düzeyinde
+"kullanılabilir" görünüyor. Mekanizmanın çözünürlüğü **alan** düzeyinde, sorun **kanal** düzeyinde.
+
+Ön kayıt "üçüncü şart sağlanmazsa mekanizma işe yaramıyor demektir" diyordu. Düzeltme:
+mekanizma **kısmen** çalışıyor — iki gerçek ölü kural buldu (`UEBA-0006`, `UEBA-0008`; toplam
+ağırlık 11) ama asıl aradığı vakayı göremedi.
+
+**Bu sapmada mekanizma ölçüm görüldükten sonra genişletilMEDİ.** Kanal düzeyi çözünürlük ayrı bir
+faz (A-3) ve ayrı bir ön kayıtla yapılacak. Bayrak varsayılan **kapalı** kalıyor.
+
+## Sapma 4 — doğrulama 30 günlük pencereyle yapıldı
+
+Şema kararı veri setinin şemasından çıkar, koşu sonucundan değil; harita motor kurulurken, tek gün
+işlenmeden hesaplanır. Bu yüzden 30 günlük pencere 360 günlükle **aynı şema kararını** verir ve
+17 GB'lık `http.csv`'yi bir kez taramak yeterlidir.
+
+**Pencereye bağlı olan tek şey senaryo sayımıdır:** r4.2'de 2, r6.2'de 1 senaryo pencereye düştü.
+`ölçülebilir 2 · ÖLÇÜLEMEZ 0` satırları bu küçük örneklem içindir ve **kapsama oranı iddiası
+değildir**.

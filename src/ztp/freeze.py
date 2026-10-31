@@ -26,6 +26,7 @@ PKG = Path(__file__).resolve().parent
 REPO = PKG.parent.parent
 MANIFEST_VERSION = 1
 FROZEN_CODE = (
+    "availability.py",  # v8: hangi kuralın SINANAMAZ sayılacağına karar verir → kapsama paydasını etkiler
     "config.py",
     "detection/catalog.py",
     "detection/engine.py",
@@ -36,6 +37,7 @@ FROZEN_CODE = (
     "prediction_model.py",
     "profile.py",
     "quality.py",
+    "schema_profiler.py",  # v8: `TUREV_BAGIMLILIK` zinciri — burada bir satır, bir kuralı ölü/canlı yapar
     "scoring.py",
     "stats.py",
     "unsupervised.py",  # v5: denetimsiz anomali kanalı skora toplamsal girer → tespit davranışını etkiler
