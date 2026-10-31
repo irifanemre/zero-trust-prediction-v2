@@ -436,6 +436,35 @@ olduğu ölçüldüğü için sıradaki iş yeni bileşen eklemek değil, var ol
 Ayrıntı: [`docs/sprint-v6-sonuclar.md`](docs/sprint-v6-sonuclar.md) ·
 ön kayıt ve üç sapma: [`docs/sprint-v6-on-kayit.md`](docs/sprint-v6-on-kayit.md).
 
+### v7 ayar taraması: tek kazanan yok, bir verimlilik sınırı var
+
+Sprint v6'da yeni bileşenin marjinal getirisinin sıfıra yakın olduğu ölçüldükten sonra, yalnız **var olanı
+ayarlayan** altı varyant koşuldu. Sonuç "hangi ayar en iyi" değil — **doğru cevap analist kapasitesine bağlı**:
+
+| Analist kapasitesi | Yapılandırma | Yakalanan | Günlük vaka | Vaka/insider |
+|---|---|---|---|---|
+| Yüksek | **graf çarpanı + öncelik** | **27/34** | 23,0 | 76,6 |
+| Orta | **graf + Bayes kapısı** | 23/34 | **4,4** | **17,3** |
+| Düşük | Bayes kapısı (gözlem 25) | 20/34 | 3,1 | 14,1 |
+| *(referans)* | hepsi kapalı | 22/34 | 21,5 | 88,1 |
+
+Dört bulgu:
+
+1. **Kapı eşiği hiç önemli değilmiş.** 0,1 / 0,2 / 0,3 → üçü de 18/34 ve ~215 vaka. "Eşik fazla agresif"
+   hipotezim **yanlıştı**.
+2. **`bayes_min_gozlem` önemliymiş.** 10 → 25 yapınca **+2 senaryo** (18→20) geri geldi. Kayıp, az kanıtla
+   susturulan örüntülerdenmiş — ikinci hipotez doğru çıktı.
+3. **Öncelik sıralayıcı bedelsiz bir kazanç.** Vaka sayısı **birebir aynı** (1.939) kalırken recall@10
+   0,618 → **0,676**. Tasarım sözleşmesi buydu: kuyruğun üyeliğini değil sırasını değiştirir.
+4. **Graf ve kapı birbirini kısmen götürüyor.** Kapı, grafın kazandırdığı 5 senaryonun 4'ünü geri alıyor
+   (27 → 23). Ama verimlilik dört katına çıkıyor: 76,6 → 17,3 vaka/insider.
+
+**Graf çarpanı her üç çalışma noktasında da kazandırıyor** — 41 bayrak içinde bu tutarlılığı gösteren tek
+bileşen. Buna rağmen varsayılan **henüz değiştirilmedi**: r4.2 ayar verisidir ve karar, r6.2'de yalnız grafın
+ölçülmesine bağlıdır.
+
+Ayrıntı: [`docs/v7-ayar-taramasi.md`](docs/v7-ayar-taramasi.md).
+
 ## Lisans
 
 Apache-2.0 — bkz. [LICENSE](LICENSE).
