@@ -8,7 +8,7 @@ import math
 import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -173,6 +173,9 @@ class ZeroTrustPredictionPipeline:
         )
         self.graf_ogrenen = self._graf_ogrenen_kur() if self.cfg.graf_ogrenen_enabled else None
         self.metrics = MetricsCollector(self.cfg, d.ground_truth, self.catalog)
+        # Denetim kancası: her gün üretilen TÜM sinyaller (skorlamadan önce) dışarı verilir.
+        # Karar yoluna dokunmaz; `scripts/esik_ulasilabilirlik.py` bununla sinyal aralıklarını çıkarır.
+        self.sinyal_gozlemci: Optional[Callable[[pd.Timestamp, Dict[str, dict]], None]] = None
 
     def _ingest(self, events: pd.DataFrame) -> pd.DataFrame:
         """Ham olaylar → kimlik çözümleme → veri kalitesi istatistikleri → varlık-gün ve cihaz-gün türevleri (gün sırasıyla).
@@ -564,6 +567,10 @@ class ZeroTrustPredictionPipeline:
         for sink in self.sinks:  # 17.6 SOAR / ticketing entegrasyonu — takma adlı vaka, gerçek kimlik gönderilmez
             for c in cases_today:
                 sink.emit({k: v for k, v in c.items() if k not in ("_sid", "rapor")})
+        if self.sinyal_gozlemci is not None:
+            # Günün SONU: UEBA + tahmin + graf + ilişkisel sinyallerin hepsi üretildikten sonra.
+            # Daha erken çağrılırsa tahmin ve ilişkisel sinyaller "hiç üretilmedi" görünür.
+            self.sinyal_gozlemci(day, signals)
         self._geri_bildirim(day, cases_today)
         if self.yol is not None:  # v6-B: gün bitti → bugünün geçişleri ancak ŞİMDİ modele öğretilir
             self.yol.ogren_gun(day, {s: [t for _, t in taktik_dizisi(hits_today[s], self.kg)] for s in sorted(signals)})
