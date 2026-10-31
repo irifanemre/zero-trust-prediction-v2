@@ -166,6 +166,55 @@ VARIANTS: Dict[str, dict] = {
         aciklama="v6-C kontrol: öğrenen graf AÇIK ama ağırlık 0 — sinyal üretmek skoru değiştirmemeli",
         cfg=dict(graf_ogrenen_enabled=True, graf_ogrenen_agirligi=0.0),
     ),
+    # ---- v7 AYAR taraması. Yeni bileşen YOK: sprint v6'da marjinal getirinin sıfıra yakın olduğu
+    # ölçüldü. Buradaki varyantlar yalnız ölçülmüş şekilde çalışan iki bileşeni ayarlar.
+    # Bayes kapısı 0,3'te vakayı %89 kısıyor ama 4 senaryo kaybettiriyor; eşik ve gözlem taraması:
+    "v7_kapi_01": dict(
+        aciklama="Bayes kapısı eşik 0,1 (0,3 fazla agresifti: −4 senaryo)",
+        cfg=dict(geri_bildirim_dongusu=True, analist_gecikme_gun=2, bayes_kapi_esigi=0.1, bayes_min_gozlem=10),
+    ),
+    "v7_kapi_02": dict(
+        aciklama="Bayes kapısı eşik 0,2",
+        cfg=dict(geri_bildirim_dongusu=True, analist_gecikme_gun=2, bayes_kapi_esigi=0.2, bayes_min_gozlem=10),
+    ),
+    "v7_kapi_03_gozlem25": dict(
+        aciklama="Bayes kapısı 0,3 ama min_gozlem 10→25: ince kanıtla susturulan örüntüler korunur",
+        cfg=dict(geri_bildirim_dongusu=True, analist_gecikme_gun=2, bayes_kapi_esigi=0.3, bayes_min_gozlem=25),
+    ),
+    # Ölçülmüş şekilde çalışan İKİ bileşen (graf çarpanı +5, kapı precision 5,3×) hiç birlikte denenmedi:
+    "v7_graf_arti_kapi": dict(
+        aciklama="graf çarpanı + Bayes kapısı BİRLİKTE — ikisi de ölçülmüş şekilde çalışıyor, hiç birlikte denenmedi",
+        cfg=dict(
+            graf_enabled=True,
+            graf_agirligi=0.5,
+            geri_bildirim_dongusu=True,
+            analist_gecikme_gun=2,
+            bayes_kapi_esigi=0.2,
+            bayes_min_gozlem=25,
+        ),
+    ),
+    # Darboğazın SIRALAMA olduğu ölçüldü (kaçan 12'nin 5'i tespit edilmiş, bütçeyi kaçırmış).
+    # Tam bu iş için yazılmış `priority()` fonksiyonunun dört ağırlığı da 0 ve hiç ölçülmedi:
+    "v7_oncelik_hepsi": dict(
+        aciklama="öncelik sıralayıcının dört ağırlığı birden açık (momentum+çeşitlilik+varlık+akran)",
+        cfg=dict(
+            priority_momentum_weight=0.5,
+            priority_diversity_weight=0.5,
+            priority_asset_weight=0.5,
+            priority_peer_weight=0.5,
+        ),
+    ),
+    "v7_graf_arti_oncelik": dict(
+        aciklama="graf çarpanı + öncelik sıralayıcı — ikisi de sıralamaya etki eder, birlikte ölçülmedi",
+        cfg=dict(
+            graf_enabled=True,
+            graf_agirligi=0.5,
+            priority_momentum_weight=0.5,
+            priority_diversity_weight=0.5,
+            priority_asset_weight=0.5,
+            priority_peer_weight=0.5,
+        ),
+    ),
     "v6_gurultulu_etiket": dict(
         aciklama="v6-A döngü, analistin %15'i yanılıyor — gürültülü etikete dayanıklılık",
         cfg=dict(
