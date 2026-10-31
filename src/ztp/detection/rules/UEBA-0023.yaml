@@ -1,0 +1,58 @@
+id: UEBA-0023
+ad: Dış e-posta hacminde anormal artış
+surum: '1.0'
+durum: golge-modda
+katman: UEBA
+attack:
+- T1048
+fp_riski: orta
+veri_kaynaklari:
+- eposta
+mantik:
+  pencere: 1d
+  kosullar:
+  - eposta_dis_z > 3.5
+siddet:
+  sinyal: eposta_dis_z
+  esik: 3.5
+  olcek: 2.0
+agirlik: 6
+bastirma:
+- servis_hesaplari
+- izin_donusu
+sahip: guvenlik-operasyon
+runbook: RB-UEBA-0023
+rapor_sinyalleri:
+- eposta_dis_bayt
+- eposta_dis_sayi
+- eposta_ek_sayisi
+- eposta_dis_z
+kanit: []
+test_senaryolari:
+- ad: ani_buyuk_dis_gonderim
+  beklenen: true
+  sinyaller:
+    eposta_dis_z: 9.0
+- ad: esik_alti_normal_gun
+  beklenen: false
+  sinyaller:
+    eposta_dis_z: 1.2
+- ad: tam_esikte
+  beklenen: false
+  sinyaller:
+    eposta_dis_z: 3.5
+notlar: |
+  v8. UEBA-0003 (genel veri çıkış hacmi) ile AYNI kalıp ve AYNI eşik, farklı kanal.
+
+  Gerekçe: e-posta baytları şimdiye kadar genel `bytes_out` havuzuna karışıyordu ve web trafiğiyle
+  AYNI baz çizgisini paylaşıyordu. Yoğun web kullanan bir kullanıcının dış e-postayla veri çıkarması
+  kendi web tabanına gömülüyordu — v6-D'de bulut kanalında ölçülen maskelemenin birebir aynısı.
+
+  Eşik 3,5 ve ölçek 2,0 UEBA-0003'ten alındı: aynı türde sinyal (hacim robust-z'si), aynı istatistik,
+  dolayısıyla farklı bir eşik seçmek için sebep yok. Ağırlık 6 — UEBA-0003'ün 8'inden düşük (tek kanal
+  ölçüyor), UEBA-0021'in 4'ünden yüksek (hacim, niyetten daha doğrudan kanıt).
+
+  İÇ e-posta kapsam dışıdır: `email_internal` kurumun kendi alan adına gider ve sızıntı kanalı değildir.
+  Ayrım `data/cert.py` içinde alıcı adresine bakılarak yapılır.
+
+  GÖLGE MODDA doğdu (13.6). Yayına çıkış şartı ön kayıtta yazılı üç eşiktir.

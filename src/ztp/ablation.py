@@ -215,6 +215,11 @@ VARIANTS: Dict[str, dict] = {
             priority_peer_weight=0.5,
         ),
     ),
+    # ---- v8 kanal kuralları: ölçüm için yayına alınır (YAML gölgede kalır)
+    "v8_kanal_kurallari": dict(
+        aciklama="v8: UEBA-0023 (dış e-posta) + UEBA-0024 (webmail) ÖLÇÜM için yayında",
+        catalog=_yayina(("UEBA-0023", "UEBA-0024")),
+    ),
     "v6_gurultulu_etiket": dict(
         aciklama="v6-A döngü, analistin %15'i yanılıyor — gürültülü etikete dayanıklılık",
         cfg=dict(

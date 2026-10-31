@@ -81,6 +81,19 @@ def extract_features(ev_all: pd.DataFrame, critical_assets: Sequence[str]) -> pd
     # niyet sinyali (iş arama) yöntem sinyalini (bulut yükleme) maskeliyor. r6.2'de kaçan S5'te ölçüldü:
     # kullanıcının havuz tabanı 11,99/gün, bulut tabanı 0,098/gün; olay günü 4 bulut olayı havuzda görünmez kaldı.
     f["cloud_app_count"] = ev[ev["app"].isin(CLOUD_APPS)].groupby(keys).size()
+    # v8: KANAL BAZINDA ayrı sayaçlar (`docs/sprint-v8-kanal-kurallari-on-kayit.md`). v6-D'deki maskelemenin
+    # aynısı e-postada da var: e-posta baytları genel `bytes_out` havuzunda web trafiğiyle AYNI baz çizgisini
+    # paylaşıyordu. Yoğun web kullanan birinin dış e-postayla veri çıkarması kendi web tabanına gömülür.
+    dis_eposta = ev[ev["app"] == "email_external"]
+    f["ext_email_bytes"] = dis_eposta.groupby(keys)["bytes_out"].sum()
+    f["ext_email_count"] = dis_eposta.groupby(keys).size()
+    if "attachments" in ev.columns:  # CSV'den okunuyordu ama hiç kullanılmıyordu: ek SAYISI hacimden ayrı bir davranış
+        f["ext_email_attachments"] = pd.to_numeric(dis_eposta["attachments"], errors="coerce").groupby(
+            [dis_eposta[k] for k in keys]
+        ).sum()
+    # Kişisel webmail: URL_CATEGORIES'te tanımlıydı ama ne SENSITIVE_APPS ne CLOUD_APPS'te — yani tanınıp
+    # görmezden geliniyordu. Kurumsal e-posta ağ geçidini atlamanın en basit yolu budur.
+    f["webmail_count"] = ev[ev["app"] == "webmail"].groupby(keys).size()
     # aldatma katmanı: tuzak etkileşimi sayımı baseline'a GİRMEZ (NUM_FEATURES dışında) — deterministik sinyal
     has_token = ev[TOKEN_COLUMN].notna() if TOKEN_COLUMN in ev.columns else pd.Series(False, index=ev.index)
     f["honeytoken_count"] = ev[has_token].groupby(keys).size()
@@ -89,7 +102,12 @@ def extract_features(ev_all: pd.DataFrame, critical_assets: Sequence[str]) -> pd
         "honeytoken_count",
         "sensitive_app_count",
         "cloud_app_count",  # v6-D: sızıntı kanalı sayacı da doldurulur (groupby.size() olaysız günde NaN üretir)
+        "ext_email_bytes",  # v8: kanal bazlı sayaçlar
+        "ext_email_count",
+        "ext_email_attachments",
+        "webmail_count",
     ]
+    count_cols = [c for c in count_cols if c in f.columns]
     f[count_cols] = f[count_cols].fillna(0)
     # kümeler + kanıt (olay kimlikleri) + imkânsız seyahat: numpy döngüsü (varlık-gün başına ~15 olay)
     idx = g.indices

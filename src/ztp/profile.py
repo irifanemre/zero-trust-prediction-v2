@@ -168,6 +168,7 @@ class ProfileEngine:
             ["usb_count", "files_accessed", "bytes_out"]
             + (["sensitive_app_count"] if "sensitive_app_count" in hist else [])
             + (["cloud_app_count"] if "cloud_app_count" in hist else [])  # v6-D: sızıntı kanalı ayrı
+            + [c for c in ("ext_email_bytes", "webmail_count") if c in hist]  # v8: kanal bazlı
         )
         w6_sum = hist[hist["day"] >= day - 6 * DAY].groupby("sid")[w6_cols].sum()
         # #1 çok ufuklu kanıt biriktirici (v3): aynı sayım ailelerinin 1/3/7/14/30 günlük toplamları. Tek olay yerine
@@ -189,6 +190,26 @@ class ProfileEngine:
         p_bulut = (
             gp["cloud_app_count"].agg(["mean", "var"]).fillna(0)
             if "cloud_app_count" in hist
+            else pd.DataFrame(columns=["mean", "var"])
+        )
+        # v8: kanal bazlı baz çizgileri. E-posta HACİM (robust-z, UEBA-0003 kalıbı), webmail SAYIM
+        # (negatif binom, UEBA-0022 kalıbı) — iki kanal farklı türde sinyal taşır.
+        p_eposta = (
+            pd.DataFrame(
+                dict(
+                    med=gp["ext_email_bytes"].median(),
+                    mad=(hist["ext_email_bytes"] - gp["ext_email_bytes"].transform("median"))
+                    .abs()
+                    .groupby(hist["sid"])
+                    .median(),
+                )
+            )
+            if "ext_email_bytes" in hist
+            else pd.DataFrame(columns=["med", "mad"])
+        )
+        p_webmail = (
+            gp["webmail_count"].agg(["mean", "var"]).fillna(0)
+            if "webmail_count" in hist
             else pd.DataFrame(columns=["mean", "var"])
         )
         peer_foreign_rate = hist.groupby("peer")["foreign_device_flag"].mean().to_dict()
@@ -246,6 +267,8 @@ class ProfileEngine:
         ctx.acc_sums = acc_sums
         ctx.p_sens = p_sens
         ctx.p_bulut = p_bulut
+        ctx.p_eposta = p_eposta
+        ctx.p_webmail = p_webmail
         ctx.peer_foreign_rate = peer_foreign_rate
         return ctx
 
@@ -515,6 +538,29 @@ class ProfileEngine:
         s["bulut_7g_p"] = negbin_sf(bulut7, 7 * max(mu_b, 0.02), 7 * var_b) if (bulut7 > 0 and profil_gun >= 30) else 1.0
         if bulut7 > 0:
             ex["bulut_7g"] = f"{bulut7} sızıntı kanalı olayı (beklenen ~{7 * max(mu_b, 0.02):.2f})"
+        # v8: DIŞ E-POSTA hacmi, kendi dış e-posta tabanına göre (genel hacim havuzuna karışmadan).
+        eposta_taban = getattr(ctx, "p_eposta", None)
+        e_bayt = float(row.get("ext_email_bytes", 0) or 0)
+        s["eposta_dis_bayt"] = e_bayt
+        s["eposta_dis_sayi"] = float(row.get("ext_email_count", 0) or 0)
+        s["eposta_ek_sayisi"] = float(row.get("ext_email_attachments", 0) or 0)
+        if eposta_taban is not None and sid in eposta_taban.index and profil_gun >= 30:
+            s["eposta_dis_z"] = robust_z(e_bayt, float(eposta_taban.loc[sid, "med"]), float(eposta_taban.loc[sid, "mad"]), 5e6)
+        else:
+            s["eposta_dis_z"] = 0.0
+        if s["eposta_dis_z"] > 2.0:
+            ex["eposta_dis"] = f"dış e-posta {e_bayt / 1e6:.1f} MB (z={s['eposta_dis_z']:.1f}, {s['eposta_dis_sayi']:.0f} gönderim)"
+        # v8: KİŞİSEL WEBMAIL — seyrek kanal, UEBA-0022 ile aynı kalıp (sayım + negatif binom).
+        webmail_taban = getattr(ctx, "p_webmail", None)
+        k_wm = int(row.get("webmail_count", 0) or 0)
+        wm7 = k_wm + (int(prev6["webmail_count"]) if prev6 is not None and "webmail_count" in prev6 else 0)
+        var_wm = webmail_taban is not None and sid in webmail_taban.index
+        mu_w = float(webmail_taban.loc[sid, "mean"]) if var_wm else 0.0
+        var_w = float(webmail_taban.loc[sid, "var"]) if var_wm else 0.0
+        s["webmail_7g_toplam"] = wm7
+        s["webmail_7g_p"] = negbin_sf(wm7, 7 * max(mu_w, 0.02), 7 * var_w) if (wm7 > 0 and profil_gun >= 30) else 1.0
+        if wm7 > 0:
+            ex["webmail_7g"] = f"{wm7} kişisel webmail olayı (beklenen ~{7 * max(mu_w, 0.02):.2f})"
         s["jaccard_uygulama"] = jaccard(set(apps_today), set(p_apps))
         if new_both or new_sens:
             ex["yeni_uygulamalar"] = sorted(new_both | new_sens)

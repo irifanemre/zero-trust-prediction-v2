@@ -9,7 +9,8 @@ import json
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
+V6 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
 V5 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
 V4 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v4.json"
 V3 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v3.json"
@@ -23,8 +24,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 23  # v6: UEBA-0022 eklendi (v2'den beri ilk kural değişikliği)
-    assert m["etiket"] == "kurallar-donduruldu-v6"
+    assert len(m["degerler"]["kurallar"]) == 25  # v7: UEBA-0023 (dış e-posta) ve UEBA-0024 (webmail)
+    assert m["etiket"] == "kurallar-donduruldu-v7"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -112,7 +113,7 @@ def test_v6_ilk_kural_eklemesi_ve_golge_modda():
     Kural gölge modda doğdu (13.6) — yani dondurma kümesine girdi ama kuyruğa vaka gönderemez.
     Ayrıca sızıntı kanalı sayacı havuzdan ayrıldığı için `features.py` ve `profile.py` değişti.
     """
-    v5, v6 = (json.loads(p.read_text(encoding="utf-8")) for p in (V5, MANIFEST))
+    v5, v6 = (json.loads(p.read_text(encoding="utf-8")) for p in (V5, V6))
     eklenen = set(v6["degerler"]["kurallar"]) - set(v5["degerler"]["kurallar"])
     assert eklenen == {"UEBA-0022"}
     assert v6["degerler"]["kurallar"]["UEBA-0022"]["durum"] == "golge-modda"
@@ -130,3 +131,32 @@ def test_v6_bayraklari_varsayilanda_kapali():
     assert c.geri_bildirim_dongusu is False  # katman A
     assert c.saldiri_yolu_enabled is False and c.saldiri_yolu_agirligi == 0.0  # katman B
     assert c.graf_ogrenen_enabled is False and c.graf_ogrenen_agirligi == 0.0  # katman C
+
+
+def test_v7_kanal_kurallari_golge_modda():
+    """v7, eksik KANALLARA kural ekler: dış e-posta ve kişisel webmail.
+
+    İkisi de gölge modda doğdu. Ön kayıt (`docs/sprint-v8-kanal-kurallari-on-kayit.md`) bu kuralların
+    değerinin CERT'te ölçülemeyeceğini önceden yazdı: r4.2'nin 34 senaryosunun 31'i USB'ye bağımlı.
+    Kuralları yine de yazmanın sebebi, kanal açıldığında kör kalmamaktır.
+    """
+    v6, v7 = (json.loads(p.read_text(encoding="utf-8")) for p in (V6, MANIFEST))
+    eklenen = set(v7["degerler"]["kurallar"]) - set(v6["degerler"]["kurallar"])
+    assert eklenen == {"UEBA-0023", "UEBA-0024"}
+    for rid in sorted(eklenen):
+        assert v7["degerler"]["kurallar"][rid]["durum"] == "golge-modda"
+        assert v7["degerler"]["kurallar"][rid]["agirlik"] == 6
+    # mevcut kurallar DEĞİŞMEDİ: v8 yeni kanal ekler, eskisini bozmaz
+    for rid in v6["degerler"]["kurallar"]:
+        assert v6["degerler"]["kurallar"][rid] == v7["degerler"]["kurallar"][rid]
+
+
+def test_v7_eposta_webmail_sinyalleri_uretiliyor():
+    """Kurallar sinyalsiz kalmasın: iki kanalın da özellik ve sinyal yolu bağlı olmalı."""
+    import inspect
+
+    from ztp import features, profile
+
+    kaynak = inspect.getsource(features) + inspect.getsource(profile)
+    for ad in ("ext_email_bytes", "webmail_count", "eposta_dis_z", "webmail_7g_p"):
+        assert ad in kaynak, f"{ad} hiçbir yerde üretilmiyor"

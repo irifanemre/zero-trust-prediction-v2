@@ -1,0 +1,61 @@
+id: UEBA-0024
+ad: Kişisel webmail kullanımında ani artış
+surum: '1.0'
+durum: golge-modda
+katman: UEBA
+attack:
+- T1048
+fp_riski: orta
+veri_kaynaklari:
+- proxy
+mantik:
+  pencere: 1d
+  kosullar:
+  - webmail_7g_toplam >= 3
+  - webmail_7g_p < 0.02
+siddet:
+  sinyal: webmail_7g_p
+  esik: 0.05
+  olcek: 2.0
+  donusum: log10
+agirlik: 6
+bastirma:
+- servis_hesaplari
+sahip: guvenlik-operasyon
+runbook: RB-UEBA-0024
+rapor_sinyalleri:
+- webmail_7g_toplam
+- webmail_7g_p
+kanit: []
+test_senaryolari:
+- ad: seyrek_kullanicida_ani_artis
+  beklenen: true
+  sinyaller:
+    webmail_7g_toplam: 5
+    webmail_7g_p: 0.0001
+- ad: esik_alti_tek_olay
+  beklenen: false
+  sinyaller:
+    webmail_7g_toplam: 2
+    webmail_7g_p: 0.0001
+- ad: aliskin_kullanicida_normal_hafta
+  beklenen: false
+  sinyaller:
+    webmail_7g_toplam: 25
+    webmail_7g_p: 0.6
+notlar: |
+  v8. UEBA-0022 (sızıntı kanalı) ile AYNI kalıp ve AYNI sabitler, farklı kanal.
+
+  Gerekçe: `webmail` kategorisi URL_CATEGORIES içinde tanımlıydı (gmail, yahoo, hotmail, outlook) ama
+  ne SENSITIVE_APPS ne CLOUD_APPS kümesindeydi — yani kişisel webmail TANINIYOR ve GÖRMEZDEN GELİNİYORDU.
+  Kurumsal e-posta ağ geçidinin denetlediği bir ortamda kişisel webmail, denetimi atlamanın en basit
+  yoludur ve USB kapatıldığında birincil kanallardan biri hâline gelir.
+
+  Eşikler (>= 3, p < 0,02) UEBA-0022'den alındı: webmail de seyrek bir sızıntı kanalıdır ve v6-D'de
+  ölçülen asimetri (seyrek sayaçta p<0,001 yapısal olarak sert — 15 kat sıçrama ister) burada da
+  geçerlidir. Taban zemini 0,02 aynı gerekçeyle.
+
+  Kapsam: yalnız kişisel webmail SİTELERİNE erişim. Kurumsal e-posta gönderimi UEBA-0023'ün konusudur;
+  ikisi farklı kanaldır ve ayrı sayılır.
+
+  GÖLGE MODDA doğdu (13.6).
