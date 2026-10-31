@@ -22,6 +22,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
+from typing import Dict
 from statistics import median
 
 import numpy as np
@@ -41,6 +42,31 @@ HEPSI_ACIK = dict(
     kanit_dogrulama="dengeli",
     cok_ajanli_rapor=True,
 )
+
+# Adlandırılmış yapılandırmalar. `--ayar <ad>` ile seçilir; `--ac` = `--ayar hepsi` ile aynıdır.
+# Gerekçe: r4.2 ablasyonu (31 Ekim) 41 bayraktan yalnız GRAF ÇARPANININ tutarlı değer ürettiğini,
+# ADWIN'in ise recall@10'u düşürdüğünü ölçtü. r6.2'deki "hepsi açık" koşusu grafı ADWIN'le BİRLİKTE
+# açmıştı; grafın kazancı orada sulanmış olabilir. `graf` ayarı o soruyu ayrıştırır.
+AYARLAR: Dict[str, dict] = {
+    "hepsi": HEPSI_ACIK,
+    "graf": dict(graf_enabled=True, graf_agirligi=0.5),
+    "graf_oncelik": dict(
+        graf_enabled=True,
+        graf_agirligi=0.5,
+        priority_momentum_weight=0.5,
+        priority_diversity_weight=0.5,
+        priority_asset_weight=0.5,
+        priority_peer_weight=0.5,
+    ),
+    "graf_kapi": dict(
+        graf_enabled=True,
+        graf_agirligi=0.5,
+        geri_bildirim_dongusu=True,
+        analist_gecikme_gun=2,
+        bayes_kapi_esigi=0.2,
+        bayes_min_gozlem=25,
+    ),
+}
 
 from ztp.config import TenantConfig  # noqa: E402
 from ztp.data.cert import load_cert_dataset  # noqa: E402
@@ -81,7 +107,7 @@ def run_window(i: int, w: dict, args: argparse.Namespace, out: Path) -> dict:
     mem = PeakMemory()
     t0 = time.perf_counter()
     start, end = pd.Timestamp(w["baslangic"]), pd.Timestamp(w["bitis"])
-    ek = HEPSI_ACIK if getattr(args, "ac", False) else {}
+    ek = AYARLAR.get(getattr(args, "ayar", "") or ("hepsi" if getattr(args, "ac", False) else ""), {})
     cfg = TenantConfig(tenant_id=f"cert-r{args.surum}-p{i}", alarm_budget_per_day=args.budget, **ek)
     start_hist = end - (cfg.long_window_days + WARMUP + DAYS) * DAY
     data = load_cert_dataset(args.cert_dir, start_hist, end, answers_dir=args.answers_dir, only_users=args.users)
@@ -457,7 +483,12 @@ def main() -> int:
     ap.add_argument("--tur", default="kör koşu", help="koşu türü etiketi (ör. 'geliştirme koşusu (70/15/15)')")
     ap.add_argument("--budget", type=int, default=BUDGET, help="alarm bütçesi (r5.2: 10, r6.2: 30)")
     ap.add_argument("--plan", default=str(PLAN), help="ön kayıt planı (commit karması kayda geçer)")
-    ap.add_argument("--ac", action="store_true", help="v4 bileşenlerini aç (koşu KÖR sayılmaz)")
+    ap.add_argument("--ac", action="store_true", help="v4 bileşenlerinin HEPSİNİ aç (= --ayar hepsi); koşu KÖR sayılmaz")
+    ap.add_argument(
+        "--ayar",
+        choices=sorted(AYARLAR),
+        help="adlandırılmış yapılandırma: " + " | ".join(f"{k}={sorted(v)}" for k, v in sorted(AYARLAR.items())),
+    )
     ap.add_argument("--sinama", action="store_true", help="sürücü sınaması (r4.2): yalnız son pencere, temiz ağaç şartı yok")
     args = ap.parse_args()
     args.answers_dir = args.answers_dir or str(Path(args.cert_dir).parent / "answers")
@@ -481,7 +512,8 @@ def main() -> int:
             freeze=freeze_check(Path(args.dondurma)),
             dondurma=Path(args.dondurma).name,
             tur=args.tur,
-            v4_bilesenleri=HEPSI_ACIK if args.ac else None,
+            v4_bilesenleri=(AYARLAR.get(args.ayar) if args.ayar else (HEPSI_ACIK if args.ac else None)),
+            ayar_adi=(args.ayar or ("hepsi" if args.ac else None)),
             head=git("rev-parse", "HEAD"),
             etiketler=git("tag", "--points-at", "HEAD").split(),
             plan_commit=git("log", "-1", "--format=%H", "--", str(Path(args.plan).resolve().relative_to(REPO))),
