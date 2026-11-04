@@ -9,6 +9,8 @@ onu "bu veride desen görülmedi" diye gösterdi. 3/4 yakalama rakamı, aslında
 ölçülemeyen senaryoydu. Yanlış bir rakama güvenmek, düşük bir rakamı bilmekten pahalıdır.
 """
 
+from typing import Tuple
+
 import pandas as pd
 import pytest
 
@@ -288,6 +290,191 @@ def test_kural_matrisi_sinanamaz_durumunu_ayri_tutar():
     ozet = mc._matrix_summary(matris)
     assert ozet["sinanamaz_sema"] == len(e.sema_olu) and "UEBA-0003" in ozet["sema_olu_kural"]
     assert ozet["sinanamaz_sema"] + ozet["sinanmadi"] + ozet["dogrulandi"] + ozet["kismen"] == ozet["kural"]
+
+
+# ---------------------------------------------------------------- A-3: kanal düzeyi
+
+
+def _kanalli(**olu: Tuple[str, ...]) -> OzellikHaritasi:
+    """Her alan her kanalda dolu; `olu` ile tek tek kanal boşaltılır: `_kanalli(app=("email",))`."""
+    h = _harita()
+    kaynaklar = ("ad", "proxy", "email", "file_server", "dlp", "edr")
+    for a in TUM_ALANLAR:
+        for k in kaynaklar:
+            bos = k in olu.get(a, ())
+            h.kanallar[(a, k)] = (
+                AlanDurumu(a, var=True, doluluk=0.0, tekil=1) if bos else AlanDurumu(a, var=True, doluluk=0.9, tekil=9)
+            )
+    return h
+
+
+def test_kural_kanallari_source_alias_cevirisi():
+    """Katalogdaki iş dilindeki kaynak adı, olay tablosundaki teknik ada çevrilmeli."""
+    from ztp.availability import kural_kanallari
+
+    assert kural_kanallari(dict(veri_kaynaklari=["proxy"])) == ("proxy",)
+    assert kural_kanallari(dict(veri_kaynaklari=["ad_oturum"])) == ("ad",)
+    assert kural_kanallari(dict(veri_kaynaklari=["dosya_sunucu", "proxy"])) == ("file_server", "proxy")
+    assert kural_kanallari(dict(veri_kaynaklari=["_internal"])) == ()  # şemaya bağlı değil
+    assert kural_kanallari({}) == ()
+
+
+def test_A3_kanal_duzeyi_kanala_ozel_sinyalde_calisir():
+    """Kanala özel sinyal: `usb_count` yalnız `dlp`'den gelir (`features.py:75` filtreli).
+
+    `dlp` kanalında `action` boşsa USB kuralı ölüdür — alan düzeyi bunu göremez, çünkü `action`
+    diğer kanallarda doludur.
+    """
+    katalog = [dict(id="UEBA-0017", veri_kaynaklari=["dlp"], mantik=dict(kosullar=["usb_sayisi >= 3"]))]
+    h = _kanalli(action=("dlp",))
+    assert h.kullanilabilir("action"), "ön koşul: alan TOPLAMDA dolu görünmeli"
+    assert not h.kullanilabilir("action", "dlp")
+    assert kural_mevcudiyeti(katalog, h, kanal_duzeyi=False).degerlendirilebilir("UEBA-0017")  # A-2: göremez
+    m = kural_mevcudiyeti(katalog, h, kanal_duzeyi=True)
+    assert not m.degerlendirilebilir("UEBA-0017")  # A-3: görür
+    assert "action@dlp" in m.neden("UEBA-0017")
+
+
+def test_A3_KANALLAR_ARASI_toplanan_alan_kanal_kararindan_MUAF():
+    """`bytes_out` günün tüm kanallarındaki toplamdır (`features.py:61`, kaynak filtresi YOK).
+
+    Web kanalı boşsa sinyal ZAYIFLAR, sıfırlanmaz: `UEBA-0003` r4.2'de skor payının 0,68'ini
+    üretiyor, çünkü e-posta ve dosya kanalları bayt taşıyor. A-3'ün ilk sürümü bu kuralı
+    `bytes_out@proxy` boş diye ölü ilan etti — ön kayıt ölçütü 4 o yüzden kaldı.
+
+    `veri_kaynaklari` üretimde hangi telemetrinin GEREKTİĞİNİ beyan eder; sinyalin hangi kanalı
+    topladığını beyan etmez.
+    """
+    from ztp.schema_profiler import KANALLAR_ARASI
+
+    assert "bytes_out" in KANALLAR_ARASI
+    katalog = [dict(id="UEBA-0003", veri_kaynaklari=["proxy"], mantik=dict(kosullar=["veri_hacmi_z > 3.5"]))]
+    h = _kanalli(bytes_out=("proxy",))
+    assert not h.kanallar[("bytes_out", "proxy")].kullanilabilir  # kanal profili yine ÖLÇÜLÜR
+    assert h.kullanilabilir("bytes_out", "proxy"), "ama karar ALAN düzeyine düşer"
+    assert kural_mevcudiyeti(katalog, h, kanal_duzeyi=True).degerlendirilebilir("UEBA-0003")
+    # alan TAMAMEN boşsa kural yine ölür: muafiyet "hiç bakma" demek değil
+    hepsi = _kanalli(bytes_out=("ad", "proxy", "email", "file_server", "dlp", "edr"))
+    hepsi.alanlar["bytes_out"] = AlanDurumu("bytes_out", var=True, doluluk=0.0, tekil=1)
+    assert not kural_mevcudiyeti(katalog, hepsi, kanal_duzeyi=True).degerlendirilebilir("UEBA-0003")
+
+
+def test_A3_olcut4_saglam_kanalda_hicbir_kural_kapanmaz():
+    """Ölçüt 3'ün freni: kanallar sağlamken hiçbir kural kapatılmamalı (r4.2'nin durumu)."""
+    m = kural_mevcudiyeti(load_catalog(), _kanalli(), kanal_duzeyi=True)
+    assert m.olu == frozenset(), f"sağlam şemada ölü ilan edilen kural: {sorted(m.olu)}"
+
+
+def test_A3_cok_kanalli_kural_TEK_kanal_olunce_yasar():
+    """Beyan edilen kanalların HEPSİ ölmeden kural ölmez — `UEBA-0021` deseni (proxy + email).
+
+    `app` iki kanalda da üretilir (`cert.py`: http'de URL kategorisi, email'de iç/dış alıcı), yani
+    kanala özeldir ve kanal kararına girer — `bytes_out`'un aksine.
+    """
+    katalog = [dict(id="K", veri_kaynaklari=["proxy", "email"], mantik=dict(kosullar=["yeni_uygulama_sayisi >= 1"]))]
+    m = kural_mevcudiyeti(katalog, _kanalli(app=("proxy",)), kanal_duzeyi=True)
+    assert m.degerlendirilebilir("K"), "bir kanal boş diye kural susturulmamalı"
+    hepsi = kural_mevcudiyeti(katalog, _kanalli(app=("proxy", "email")), kanal_duzeyi=True)
+    assert not hepsi.degerlendirilebilir("K")
+    assert "app@proxy" in hepsi.neden("K") and "app@email" in hepsi.neden("K")
+
+
+def test_A3_kanalsiz_kural_alan_duzeyine_duser():
+    """`veri_kaynaklari` boş ya da yalnız `_internal` ise kanal kararı yoktur — eski yol."""
+    katalog = [dict(id="PRED-X", veri_kaynaklari=["_internal"], mantik=dict(kosullar=["yeni_uygulama_sayisi >= 1"]))]
+    assert not kural_mevcudiyeti(katalog, _kanalli(app=("proxy",)), kanal_duzeyi=True).olu
+    h = _harita(app="bos")  # alan tamamen boş → alan düzeyi karar yine çalışır
+    assert not kural_mevcudiyeti(katalog, h, kanal_duzeyi=True).degerlendirilebilir("PRED-X")
+
+
+def test_A3_kanal_profili_YOKSA_alan_duzeyine_duser():
+    """Bayrak açık ama kanal profili toplanmamış: karar verilmez, eski yola düşülür."""
+    katalog = [dict(id="UEBA-0017", veri_kaynaklari=["dlp"], mantik=dict(kosullar=["usb_sayisi >= 3"]))]
+    m = kural_mevcudiyeti(katalog, _harita(), kanal_duzeyi=True)  # kanallar boş
+    assert m.degerlendirilebilir("UEBA-0017") and m.kurallar["UEBA-0017"].kanallar == ()
+
+
+def test_A3_kaynak_alanlari_kanal_bazinda_profil_cikarir():
+    from ztp.schema_profiler import kaynak_alanlari
+
+    ev = pd.DataFrame(
+        dict(
+            source=["proxy"] * 4 + ["email"] * 4,
+            bytes_out=[0, 0, 0, 0, 120, 340, 90, 7700],
+            app=list("abcdefgh"),
+        )
+    )
+    k = kaynak_alanlari(ev)
+    assert k[("bytes_out", "proxy")].durum == "bos"  # r6.2: web olaylarında hep 0
+    assert k[("bytes_out", "email")].kullanilabilir
+    assert kaynak_alanlari(pd.DataFrame(dict(x=[1]))) == {}  # `source` kolonu yok → karar verilmez
+
+
+def test_A3_kanal_icinde_YAPISAL_sabitlik_olu_sayilmaz():
+    """Gruplama değişkeni kendi grubunda tek değerlidir — bu bir veri eksiği DEĞİLDİR.
+
+    İlk sürüm tekilliği kanal başına ölçtü ve r4.2'de `UEBA-0005` ile `UEBA-0017`'yi ölü ilan etti.
+    `UEBA-0017`, 34 senaryonun 31'inin dayandığı USB kuralıdır: mekanizma sistemin en değerli
+    kuralını susturmuş olurdu.
+    """
+    from ztp.schema_profiler import kaynak_alanlari
+
+    ev = pd.DataFrame(
+        dict(
+            source=["dlp"] * 3 + ["proxy"] * 3,
+            action=["usb_copy"] * 3 + ["http"] * 3,  # kanal başına tek değer — YAPISAL
+            bytes_out=[5, 6, 7, 0, 0, 0],
+        )
+    )
+    k = kaynak_alanlari(ev)
+    assert k[("source", "dlp")].kullanilabilir, "gruplama değişkeni kendi grubunda 'sabit' sayılmamalı"
+    assert k[("action", "dlp")].kullanilabilir and k[("action", "proxy")].kullanilabilir
+    assert k[("bytes_out", "dlp")].kullanilabilir  # gerçek doluluk kanala özel kalır
+    assert k[("bytes_out", "proxy")].durum == "bos"
+
+
+def test_A3_profille_kanal_uyarisi_alan_duzeyinin_goremedigini_soyler():
+    from ztp.schema_profiler import profille
+
+    ev = pd.DataFrame(
+        dict(
+            source=["proxy"] * 3 + ["email"] * 3,
+            bytes_out=[7, 8, 9, 120, 340, 7700],
+            app=["x", "y", "z", "", "", ""],  # yalnız `proxy`'de dolu → `app@email` ölü
+            action=["http"] * 3 + ["send"] * 3,
+            resource=list("uvwxyz"),
+            process=list("ABCDEF"),
+            cmdline=list("GHIJKL"),
+            time=pd.date_range("2026-01-01", periods=6, freq="h"),
+            outcome=["success", "failure"] * 3,
+        )
+    )
+    alan = profille("t", events=ev, kanal_duzeyi=False)
+    assert not any("kanallarda ölü" in u for u in alan.uyarilar), "alan düzeyi bunu göremez"
+    kanal = profille("t", events=ev, kanal_duzeyi=True)
+    assert any("app" in u and "email" in u and "kanallarda ölü" in u for u in kanal.uyarilar)
+    assert kanal.olu_kanallar()["app"] == ["email"]
+    assert "bytes_out" not in kanal.olu_kanallar()  # kanallar arası toplanan alan uyarı üretmez
+
+
+def test_A3_bayrak_sema_farkindaligi_olmadan_acilamaz():
+    with pytest.raises(ValueError, match="sema_farkindaligi açık olmalı"):
+        TenantConfig(tenant_id="t", pseudonym_secret="s", sema_kanal_duzeyi=True)
+    assert TenantConfig().sema_kanal_duzeyi is False
+
+
+def test_A3_gercek_katalogda_her_kuralin_kanali_cozulebiliyor():
+    """Sözleşme: yayındaki her kuralın kaynağı ya `_internal` ya da olay tablosunda görülen kanal.
+
+    Çözülemeyen bir kaynak adı sessizce "kanal yok" olur ve kural alan düzeyine düşer — yani A-3 o
+    kural için hiç çalışmaz. Katalog ile şema arasındaki sapma burada görünür.
+    """
+    from ztp.availability import kural_kanallari
+
+    bilinen = {"ad", "proxy", "email", "file_server", "dlp", "edr", "hr", "vpn", "ids"}
+    for kural in load_catalog():
+        for k in kural_kanallari(kural):
+            assert k in bilinen, f"{kural['id']}: `{k}` bilinen kanal değil (SOURCE_ALIAS eksik olabilir)"
 
 
 @pytest.mark.slow

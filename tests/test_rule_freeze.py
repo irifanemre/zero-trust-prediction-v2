@@ -7,9 +7,12 @@ eski manifest silinmez. Kör koşu sonucu görüldükten sonra yeni sürüm, o k
 
 import json
 
+import pytest
+
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v9.json"
+V8 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
 V7 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
 V6 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
 V5 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v5.json"
@@ -25,8 +28,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 25  # v8 kural EKLEMEZ: v7'nin 25 kuralı aynı
-    assert m["etiket"] == "kurallar-donduruldu-v8"
+    assert len(m["degerler"]["kurallar"]) == 25  # v8/v9 kural EKLEMEZ: v7'nin 25 kuralı aynı
+    assert m["etiket"] == "kurallar-donduruldu-v9"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -160,7 +163,7 @@ def test_v8_hicbir_kural_degismedi_yalniz_olcum_durustlesti():
     kapsama PAYDASINDAN düşüyor. Dondurma kümesine iki dosya eklendi çünkü ikisi de bir kuralın
     ölü/canlı sayılmasına karar veriyor.
     """
-    v7, v8 = (json.loads(p.read_text(encoding="utf-8")) for p in (V7, MANIFEST))
+    v7, v8 = (json.loads(p.read_text(encoding="utf-8")) for p in (V7, V8))
     assert v7["degerler"]["kurallar"] == v8["degerler"]["kurallar"]
     eklenen = set(v8["dosyalar"]) - set(v7["dosyalar"])
     assert eklenen == {"src/ztp/availability.py", "src/ztp/schema_profiler.py"}
@@ -184,3 +187,25 @@ def test_v7_eposta_webmail_sinyalleri_uretiliyor():
     kaynak = inspect.getsource(features) + inspect.getsource(profile)
     for ad in ("ext_email_bytes", "webmail_count", "eposta_dis_z", "webmail_7g_p"):
         assert ad in kaynak, f"{ad} hiçbir yerde üretilmiyor"
+
+
+def test_v9_kanal_duzeyi_ve_duzeltilmis_teshis():
+    """v9 de bir ÖLÇÜM sürümüdür: kural/eşik/ağırlık değişmedi (`docs/faz-a3-sonuclar.md`).
+
+    Değişen üç şey: (1) şema kararı kanal düzeyine indi, (2) kanallar arası TOPLANAN alanlar bu
+    kararın dışında bırakıldı, (3) `http.csv:content` kritik olmaktan çıktı — kolon varken de
+    okunmadığı ölçüldü, dolayısıyla yokluğu bir eksik değil.
+    """
+    v8, v9 = (json.loads(p.read_text(encoding="utf-8")) for p in (V8, MANIFEST))
+    assert v8["degerler"]["kurallar"] == v9["degerler"]["kurallar"]
+    assert set(v9["dosyalar"]) == set(v8["dosyalar"]), "v9 donmuş kümeye dosya EKLEMEZ"
+    degisen = {f for f in v8["dosyalar"] if v9["dosyalar"].get(f) != v8["dosyalar"][f]}
+    assert degisen == {"src/ztp/availability.py", "src/ztp/config.py", "src/ztp/schema_profiler.py"}
+
+
+def test_v9_kanal_bayragi_varsayilanda_kapali_ve_A2_gerektirir():
+    from ztp.config import TenantConfig
+
+    assert TenantConfig().sema_kanal_duzeyi is False
+    with pytest.raises(ValueError, match="sema_farkindaligi açık olmalı"):
+        TenantConfig(sema_kanal_duzeyi=True)

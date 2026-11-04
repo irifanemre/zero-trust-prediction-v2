@@ -1,22 +1,29 @@
 """Şema profilleyici — "bu veri setinde hangi sinyal GERÇEKTEN var?"
 
-Neden var, ölçülmüş bir hatadan: CERT r6.2'nin `http.csv` dosyasında `content` kolonu **yoktur**.
-Ayrıştırıcı `bytes_out`'u içerik uzunluğundan türettiği için o koşuda her web olayının `bytes_out`
-değeri **sıfır** oldu. Sonuç: ağırlığı 8 olan `UEBA-0003` (anormal veri çıkış hacmi) r6.2 kör
-koşusunda **hiç tetiklenemedi** — ve bu aylarca fark edilmedi. Raporda masum bir
-"bu veride desen görülmedi" satırı olarak göründü.
+Neden var, ölçülmüş bir hatadan: CERT r6.2 kör koşusunda her web olayının `bytes_out` değeri
+**sıfır** oldu, ağırlığı 8 olan `UEBA-0003` (anormal veri çıkış hacmi) web tarafında hiç
+tetiklenemedi ve bu aylarca fark edilmedi. Raporda masum bir "bu veride desen görülmedi" satırı
+olarak göründü.
+
+İlk teşhis "r6.2'nin `http.csv`'sinde `content` kolonu yok" idi ve **eksikti**: Faz A-3 ölçümü
+gösterdi ki `cert.py` `content`'i **hiçbir** sürümde okumuyor (4.2 etik sınır / 20.1 amaçla
+sınırlılık — sayfa metni hacim vekili sayılmaz). Yani r4.2'de kolon **varken de** web hacmi
+sıfırdır. Hata "eksik kolon" değil, "**ölçülemeyen kanal**" sınıfındandır — profilleyici bu yüzden
+kanal düzeyinde de bakar.
 
 Veri kalitesi katmanı (`quality.py`) bu hatayı yakalayamaz: o, **çalışma zamanında** hacim düşüşüne
 ve çözümlenemeyen orana bakar. Bir kolonun en baştan hiç var olmaması farklı bir arıza sınıfıdır.
 
-Profilleyici iki düzeyde çalışır ve **hiçbir kararı değiştirmez, yalnız okur**:
+Profilleyici üç düzeyde çalışır ve **hiçbir kararı değiştirmez, yalnız okur**:
 
 1. **Şema düzeyi** — ham dosyaların başlıkları. Ucuzdur (dosya başına bir satır) ve
    "kolon hiç yok" durumunu yakalar.
 2. **Sinyal düzeyi** — ayrıştırılmış olay tablosunda her alanın doluluk oranı ve tekil değer
    sayısı. "Kolon var ama hep sıfır" ve "kolon var ama tek değer taşıyor" durumlarını yakalar.
+3. **Kanal düzeyi** (A-3) — aynı profil `source` bazında. "Alan toplamda dolu ama BU kanalda ölü"
+   durumunu yakalar: r6.2'de `bytes_out` e-posta ve dosya kanallarında doludur, web'de sıfırdır.
 
-İkisi birlikte `OzellikHaritasi` üretir: hangi türev özelliğin üretilebileceğinin kaydı.
+Üçü birlikte `OzellikHaritasi` üretir: hangi türev özelliğin üretilebileceğinin kaydı.
 """
 
 from __future__ import annotations
@@ -25,7 +32,7 @@ import csv
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -66,6 +73,19 @@ TUREV_BAGIMLILIK: Dict[str, Tuple[str, ...]] = {
     "logon_hour": ("time",),  # dairesel saat sapması
 }
 
+# KANALLAR ARASI TOPLANAN alanlar — kanal düzeyi karar (A-3) bunlara UYGULANMAZ.
+#
+# `features.py:61`: `f["bytes_out"] = g["bytes_out"].sum()` — kaynak filtresi YOK. Oysa 68/73/75.
+# satırlar filtreliyor (`ev["source"] == "file_server"` / `"edr"` / `"dlp"`). Yani `bytes_out`
+# günün TÜM kanallarındaki baytların toplamıdır: web kanalı boşsa sinyal zayıflar, SIFIRLANMAZ.
+#
+# Bu ayrım ölçülerek bulundu. A-3'ün ilk sürümü kuralın beyan ettiği kanala (`veri_kaynaklari`)
+# bakıyordu ve r4.2'de `UEBA-0003`'ü `bytes_out@proxy` boş diye ölü ilan etti — oysa kural o veride
+# meşru şekilde tetikleniyor (skor payı 0,68), çünkü e-posta ve dosya kanalları bayt taşıyor.
+# `veri_kaynaklari` üretimde hangi telemetrinin GEREKTİĞİNİ beyan eder; sinyalin hangi kanalı
+# topladığını beyan etmez. İkisini eşitlemek kategori hatasıdır.
+KANALLAR_ARASI: FrozenSet[str] = frozenset({"bytes_out"})
+
 # CERT ham dosyalarında bir kolonun yokluğunun hangi olay alanını sakatladığı.
 # `cert.py` bu türetmeleri yapar; burada yalnız BAĞIMLILIK kayıtlıdır.
 #
@@ -74,7 +94,10 @@ TUREV_BAGIMLILIK: Dict[str, Tuple[str, ...]] = {
 # `to_removable_media` kolonunun olmaması bir eksiklik değil sürüm farkıdır (`cert.py` bunu
 # `fl_removable` ile ayırır). Bu ayrım olmadan profilleyici yanlış alarm üretir — ilk koşuda üretti.
 HAM_BAGIMLILIK: Dict[str, Tuple[str, str, bool]] = {
-    "http.csv:content": ("bytes_out", "web yükleme hacmi — yoksa UEBA-0003 web tarafında ÖLÜ", True),
+    # `http.csv:content` KRİTİK DEĞİL — kolon olsa da okunmuyor (`cert.py`, 4.2 etik sınır).
+    # "Kolon yok → ölü" demek yanlıştı: kolon VARKEN de ölü. Uyarı değil not: eksikliği bir şey
+    # değiştirmiyor, zaten hiç kullanılmıyor.
+    "http.csv:content": ("bytes_out", "web sayfa metni — ayrıştırıcı bunu BİLİNÇLİ okumaz (4.2/20.1)", False),
     "email.csv:size": ("bytes_out", "e-posta hacmi — yoksa UEBA-0023 ölü", True),
     "http.csv:url": ("app", "URL kategorileri — yoksa bulut/webmail/iş arama sinyalleri ölü", True),
     "device.csv:activity": ("action", "USB bağlantı eylemi — yoksa usb_count üretilemez", True),
@@ -119,21 +142,39 @@ class OzellikHaritasi:
     veri_seti: str
     ham_kolonlar: Dict[str, List[str]] = field(default_factory=dict)  # dosya → kolonlar
     alanlar: Dict[str, AlanDurumu] = field(default_factory=dict)  # olay tablosu alanı → durum
+    kanallar: Dict[Tuple[str, str], AlanDurumu] = field(default_factory=dict)  # (alan, kaynak) → durum (A-3)
     uyarilar: List[str] = field(default_factory=list)  # kural öldüren eksikler
     notlar: List[str] = field(default_factory=list)  # ayrıştırıcının ele aldığı sürüm farkları
 
     def alan(self, ad: str) -> AlanDurumu:
         return self.alanlar.get(ad, AlanDurumu(ad, var=False))
 
-    def kullanilabilir(self, ad: str) -> bool:
-        return self.alan(ad).kullanilabilir
+    def kullanilabilir(self, ad: str, kaynak: Optional[str] = None) -> bool:
+        """Alan kullanılabilir mi. `kaynak` verilirse YALNIZ o kanala bakılır (A-3).
 
-    def turev_uretilebilir(self, turev: str) -> bool:
+        Üç durumda alan düzeyine düşer — bilgi yoksa ya da anlamsızsa karar verilmez:
+        kanal verilmemişse, kanal profili hiç toplanmamışsa, ya da alan kanallar arası toplanıyorsa.
+        """
+        if kaynak is None or not self.kanallar or ad in KANALLAR_ARASI:
+            return self.alan(ad).kullanilabilir
+        d = self.kanallar.get((ad, kaynak))
+        return self.alan(ad).kullanilabilir if d is None else d.kullanilabilir
+
+    def turev_uretilebilir(self, turev: str, kaynak: Optional[str] = None) -> bool:
         """Türev özellik üretilebilir mi: dayandığı HAM alanların hepsi kullanılabilir olmalı."""
         bagimlilik = TUREV_BAGIMLILIK.get(turev)
         if bagimlilik is None:
             return True  # bilinmeyen türev: karar verilmez, engellenmez
-        return all(self.kullanilabilir(a) for a in bagimlilik)
+        return all(self.kullanilabilir(a, kaynak) for a in bagimlilik)
+
+    def olu_kanallar(self) -> Dict[str, List[str]]:
+        """Hangi (alan, kanal) çifti ölü. Kanallar arası toplanan alanlar listelenmez."""
+        out: Dict[str, List[str]] = {}
+        izlenen = {b for bl in TUREV_BAGIMLILIK.values() for b in bl} - KANALLAR_ARASI
+        for (ad, kaynak), durum in sorted(self.kanallar.items()):
+            if ad in izlenen and not durum.kullanilabilir:
+                out.setdefault(ad, []).append(kaynak)
+        return out
 
     def olu_turevler(self) -> Dict[str, List[str]]:
         """Üretilemeyen türev özellikler ve eksik oldukları alanlar."""
@@ -151,6 +192,7 @@ class OzellikHaritasi:
             alan=len(self.alanlar),
             kullanilabilir=sum(1 for a in self.alanlar.values() if a.kullanilabilir),
             olu_turev=self.olu_turevler(),
+            olu_kanal=self.olu_kanallar(),
             uyarilar=self.uyarilar,
             notlar=self.notlar,
         )
@@ -210,13 +252,55 @@ def olay_alanlari(events: pd.DataFrame, alanlar: Optional[Iterable[str]] = None,
     return out
 
 
+def kaynak_alanlari(
+    events: pd.DataFrame, alanlar: Optional[Iterable[str]] = None, ornek: int = 200_000
+) -> Dict[Tuple[str, str], AlanDurumu]:
+    """Faz A-3: her alanın KANAL bazında profili — `(alan, kaynak) → durum`.
+
+    Alan düzeyi profil yetmediği ölçüldü (`docs/faz-a2-sonuclar.md`): r6.2'de `bytes_out` üç
+    kanaldan beslenir (web ÖLÜ, e-posta ve dosya dolu), alan toplamda dolu görünür ve ağırlığı 8
+    olan `UEBA-0003` ölü sayılmaz. Oysa web olaylarında `bytes_out` her satırda sıfırdır.
+
+    Örnekleme kanal başına yapılır: tablonun BAŞINDAN alınan 200 bin satır, seyrek bir kanalı
+    (ör. `dlp`) hiç görmeyebilirdi; o kanal yanlışlıkla "yok" sayılırdı.
+
+    **Kanal içinde yalnız DOLULUK anlamlıdır, TEKİLLİK değildir.** Tekillik kanal başına ölçülünce
+    yapı gereği sabit olan alanlar "sabit ⚠" görünür: `source` gruplama değişkenidir, kendi grubu
+    içinde tek değerlidir; `action` `dlp` kanalında her zaman `usb_copy`, `proxy`'de her zaman
+    `http`'tir. İlk sürüm böyleydi ve r4.2'de `UEBA-0005` ile `UEBA-0017`'yi yanlışlıkla ölü ilan
+    etti — `UEBA-0017`, 34 senaryonun 31'inin dayandığı USB kuralıdır, yani mekanizma sistemin en
+    değerli kuralını susturmuş olurdu. Bu yüzden tekillik ALAN düzeyinden alınır; kanal yalnız
+    "bu kanalda hiç değer var mı" sorusunu cevaplar.
+    """
+    if events is None or not len(events) or "source" not in events.columns:
+        return {}
+    alan_duzeyi = olay_alanlari(events, alanlar, ornek)
+    out: Dict[Tuple[str, str], AlanDurumu] = {}
+    for kaynak, grup in events.groupby("source", sort=True):
+        for ad, durum in olay_alanlari(grup, alanlar, ornek).items():
+            kuresel = alan_duzeyi.get(ad)
+            out[(ad, str(kaynak))] = AlanDurumu(
+                ad,
+                var=durum.var,
+                doluluk=durum.doluluk,  # kanala özel: asıl ölçülen şey
+                tekil=kuresel.tekil if kuresel else durum.tekil,  # alan düzeyinden — yapısal "sabit" tuzağı
+                ornek=durum.ornek,
+            )
+    return out
+
+
 def profille(
     veri_seti: str,
     ham_dizin: Optional[Path] = None,
     events: Optional[pd.DataFrame] = None,
     ham_dosyalar: Sequence[str] = (),
+    kanal_duzeyi: bool = False,
 ) -> OzellikHaritasi:
-    """Şema + sinyal düzeyini birleştirip harita üretir. İkisi de isteğe bağlıdır."""
+    """Şema + sinyal düzeyini birleştirip harita üretir. İkisi de isteğe bağlıdır.
+
+    `kanal_duzeyi` (A-3) açıksa alan profili bir de KAYNAK bazında toplanır; kapalıysa `kanallar`
+    boş kalır ve `kullanilabilir(ad, kaynak)` alan düzeyine düşer — yani A-2 davranışı.
+    """
     harita = OzellikHaritasi(veri_seti=veri_seti)
     if ham_dizin is not None:
         harita.ham_kolonlar = ham_basliklar(ham_dizin, ham_dosyalar)
@@ -231,6 +315,11 @@ def profille(
                 )
     if events is not None:
         harita.alanlar = olay_alanlari(events)
+        if kanal_duzeyi:
+            harita.kanallar = kaynak_alanlari(events)
+            for ad, kaynaklar in sorted(harita.olu_kanallar().items()):
+                if harita.kullanilabilir(ad):  # alan toplamda dolu ama bazı kanallarda ölü — A-2'nin kör noktası
+                    harita.uyarilar.append(f"olay alanı `{ad}`: şu kanallarda ölü → {', '.join(kaynaklar)}")
         for ad, durum in sorted(harita.alanlar.items()):
             if durum.var and durum.durum in ("bos", "sabit") and ad in {b for bl in TUREV_BAGIMLILIK.values() for b in bl}:
                 harita.uyarilar.append(f"olay alanı `{ad}`: {durum.durum} (doluluk {durum.doluluk:.4f}, tekil {durum.tekil})")
@@ -250,6 +339,23 @@ def rapor(harita: OzellikHaritasi) -> str:
         for ad, d in sorted(harita.alanlar.items()):
             isaret = {"kullanilabilir": "", "bos": " ⚠", "sabit": " ⚠", "yok": " ✘"}[d.durum]
             sat.append(f"| `{ad}` | {d.durum}{isaret} | {d.doluluk:.4f} | {d.tekil} |")
+        sat.append("")
+    if harita.kanallar:
+        kanal_adlari = sorted({k for _, k in harita.kanallar})
+        izlenen = sorted({b for bl in TUREV_BAGIMLILIK.values() for b in bl})
+        sat += [
+            "## Alan × kanal (A-3)",
+            "",
+            "| Alan | " + " | ".join(kanal_adlari) + " |",
+            "|---" * (len(kanal_adlari) + 1) + "|",
+        ]
+        for ad in izlenen:
+            hucreler = []
+            for k in kanal_adlari:
+                d = harita.kanallar.get((ad, k))
+                hucreler.append("—" if d is None else ("✔" if d.kullanilabilir else f"✘ {d.durum}"))
+            isaret = " _(kanallar arası toplanır — karara girmez)_" if ad in KANALLAR_ARASI else ""
+            sat.append(f"| `{ad}`{isaret} | " + " | ".join(hucreler) + " |")
         sat.append("")
     olu = harita.olu_turevler()
     if olu:

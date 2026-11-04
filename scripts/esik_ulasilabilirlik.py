@@ -3,8 +3,10 @@
 
 Üç kez aynı hataya düşüldü ve üçünde de kural **yapısal olarak ulaşılamaz** oldu:
 
-1. `UEBA-0003` r6.2'de: `http.csv`'de `content` kolonu yok → `bytes_out = 0` → hacim sinyali hiç
-   üretilmiyor. Kural ağırlığı 8, en ağır iki UEBA kuralından biri, ve o koşuda hiç tetiklenemedi.
+1. `UEBA-0003`'ün WEB tarafı her CERT sürümünde: `cert.py` `http.csv`'den `content` okumaz
+   (4.2 etik sınır) → web olaylarında `bytes_out = 0`. Kural ağırlığı 8, en ağır iki UEBA
+   kuralından biri; e-posta/dosya baytlarıyla tetikleniyor ama saf web sızıntısını göremiyor.
+   (İlk teşhis "r6.2'de kolon yok" idi; eksikti — kolon varken de okunmuyor. Faz A-3.)
 2. İlk `UEBA-0022` eşiği (`p < 0.001`): seyrek bir sayaçta o p değeri 8 olay (15 kat sıçrama)
    istiyordu; yoğun sayaçta aynı eşik ~2,5 kat sıçramayla geçiliyordu.
 3. İlk `UEBA-0023` tabanı (5 MB): `bytes_out`'tan kopyalanmıştı. Dış e-posta kullanıcı-gün
@@ -171,7 +173,8 @@ def main() -> int:
                 print(f"      eşik, gözlenen en büyük değerin {b['kat']} katı")
         print(
             "\nNot: sentetik veri gerçek kurumu temsil etmez; burada ulaşılabilen bir eşik gerçek veride\n"
-            "ulaşılamaz olabilir (r6.2'de `content` kolonunun olmaması gibi). Bu denetim ALT sınırdır."
+            "ulaşılamaz olabilir (CERT'te web `bytes_out`'un hiç ölçülmemesi gibi). Bu denetim ALT sınırdır;\n"
+            "veri setine özgü ölü sinyaller için `scripts/sema_karar_dogrula.py`."
         )
     hatali = [b for b in bulgular if args.golge_dahil or b["durum"] == "yayinda"]
     return 1 if hatali else 0

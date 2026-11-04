@@ -88,13 +88,14 @@ sayısal gösterimidir.
 
 ## S5 neden hâlâ kaçıyor — artık otomatik tespit ediliyor
 
-S5-MBG3183 üç koşuda da kaçtı. Sebebi 30 Ekim'de elle bulundu: r6.2'nin `http.csv` dosyasında
-`content` kolonu yok, `bytes_out` her web olayında sıfır, dolayısıyla `UEBA-0003` **yapısal olarak
-ölü**.
+S5-MBG3183 üç koşuda da kaçtı. Sebebi 30 Ekim'de elle bulundu: `bytes_out` her web olayında sıfır,
+dolayısıyla `UEBA-0003` web tarafında **yapısal olarak ölü**.
 
-Bu artık elle bulunmuyor: **şema profilleyici** (31 Ekim) aynı eksiği ilk koşuda raporluyor.
-
-```
-r6.2  uyarı=1  http.csv: `content` kolonu yok → `bytes_out`
-      (web yükleme hacmi — yoksa UEBA-0003 web tarafında ÖLÜ)
-```
+> **31 Ekim düzeltmesi (Faz A-3).** O gün sebep "r6.2'nin `http.csv`'sinde `content` kolonu yok"
+> diye yazılmıştı. **Eksikti.** `cert.py` `content`'i **hiçbir** CERT sürümünde okumaz — sayfa
+> metni hacim vekili sayılmaz (4.2 etik sınır / 20.1 amaçla sınırlılık). Yani r4.2'de kolon
+> **varken de** web `bytes_out`'u sıfırdır ve `UEBA-0003` orada da yalnız e-posta/dosya
+> baytlarıyla tetikleniyor.
+>
+> Sonuç aynı (S5 yakalanamaz) ama sebep farklı, ve fark önemli: bu bir **r6.2 sürüm farkı değil**,
+> her CERT koşusunda geçerli bir **ölçüm sınırı**. Düzeltme: `docs/faz-a3-sonuclar.md`.

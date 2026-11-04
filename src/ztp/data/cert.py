@@ -423,6 +423,19 @@ def load_cert_dataset(
                 app=cat.values,
                 category=cat.fillna("web").values,
                 action="http",
+                # `bytes_out` WEB KANALINDA HER CERT SÜRÜMÜNDE SIFIRDIR ve bu bilinçlidir:
+                # `http_cols` `content` okumaz (4.2 etik sınır / 20.1 amaçla sınırlılık — sayfa
+                # metni hacim vekili değildir). Yani r4.2'de kolon VAR ama okunmuyor, r6.2'de kolon
+                # zaten yok. İkisi aynı sonuca çıkar: web yükleme hacmi CERT'te ölçülemez.
+                #
+                # Sonucu ölçüldü: `UEBA-0003` yalnız e-posta ve dosya baytlarıyla tetiklenir
+                # (`veri_hacmi_z` kanallar arası GÜNLÜK TOPLAMDIR, `features.py:61`). S5-MBG3183
+                # gibi saf web sızıntıları (57 saniyede 4 Dropbox yüklemesi) bu sinyalle
+                # yakalanamaz; yakalamak için kanal bazlı bir hacim sinyali gerekir
+                # (`docs/faz-a3-sonuclar.md`).
+                #
+                # Aşağıdaki dal bu yüzden ÖLÜDÜR; `content` istemeden eklenirse etik sınır da
+                # kalkmış olur. Silinmedi ki niyet görünür kalsın.
                 bytes_out=(ht["content"].str.len().values if "content" in ht else 0),
             )
         )

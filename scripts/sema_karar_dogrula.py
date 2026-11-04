@@ -44,6 +44,7 @@ def main() -> int:
     ap.add_argument("--cert-dir", required=True)
     ap.add_argument("--answers-dir", default=None)
     ap.add_argument("--gun", type=int, default=30, help="pencere uzunluğu; şema kararını DEĞİŞTİRMEZ")
+    ap.add_argument("--kanal", action="store_true", help="A-3: kanal düzeyi çözünürlük (alan × kaynak)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     base = Path(a.cert_dir).expanduser()
@@ -60,17 +61,19 @@ def main() -> int:
     data = load_cert_dataset(str(base), start, end, answers_dir=a.answers_dir)
     LOG.info("yüklendi: %d olay, %d kullanıcı, %.0f sn", len(data.events), len(data.directory), time.perf_counter() - t0)
 
-    harita = profille(surum, ham_dizin=base, events=data.events)
+    harita = profille(surum, ham_dizin=base, events=data.events, kanal_duzeyi=a.kanal)
     katalog = load_catalog()
-    m = kural_mevcudiyeti(katalog, harita)
+    m = kural_mevcudiyeti(katalog, harita, kanal_duzeyi=a.kanal)
 
-    cfg = TenantConfig(tenant_id=f"sema-{surum}", pseudonym_secret="x", sema_farkindaligi=True)
+    cfg = TenantConfig(
+        tenant_id=f"sema-{surum}", pseudonym_secret="x", sema_farkindaligi=True, sema_kanal_duzeyi=a.kanal
+    )
     cfg.available_sources = tuple(sorted(set(data.events["source"].unique()) | {"hr"}))
     motor = DetectionEngine(cfg, katalog, mevcudiyet=m)
 
     print()
     print(rapor(harita))
-    print(f"\n## Şema kararı — {surum}\n")
+    print(f"\n## Şema kararı — {surum} ({'KANAL düzeyi (A-3)' if a.kanal else 'alan düzeyi (A-2)'})\n")
     print(f"Katalog {len(katalog)} kural · şemadan ölü {len(m.olu)} · motorda sınanamaz {len(motor.sema_olu)}")
     print("(fark: 'kaynak yok' ile elenen kurallar şema damgası almaz — kurulum sebebi, veri sebebi değil)\n")
     for rid in sorted(motor.sema_olu):
@@ -100,6 +103,7 @@ def main() -> int:
             json.dumps(
                 dict(
                     surum=surum,
+                    kanal_duzeyi=a.kanal,
                     pencere=[str(start.date()), str(end.date())],
                     olay=len(data.events),
                     sema=harita.ozet(),

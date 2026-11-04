@@ -163,6 +163,12 @@ class TenantConfig:
     # r6.2'de `UEBA-0003` (ağırlık 8) `bytes_out = 0` yüzünden ölüydü ve rapor onu "bu veride desen
     # görülmedi" diye gösterdi; o cümle 12 kaçan insider'ın birini açıklamayı aylarca geciktirdi.
     sema_farkindaligi: bool = False
+    # --- Faz A-3: kanal düzeyi çözünürlük. A-2 alan düzeyinde kaldı: r6.2'de `bytes_out` üç
+    # kanaldan beslenir (web ÖLÜ, e-posta ve dosya dolu), alan toplamda dolu görünür ve
+    # `UEBA-0003` ölü sayılmaz. Açıkken sinyal, kuralın `veri_kaynaklari`'nda BEYAN ETTİĞİ
+    # kanallarda aranır. `sema_farkindaligi`'nın üstüne gelen, daha agresif bir kapatmadır —
+    # o yüzden ayrı bayrak: A-2'nin ölçülmüş davranışı ölçülmemişle karışmasın.
+    sema_kanal_duzeyi: bool = False
 
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:
@@ -248,6 +254,8 @@ class TenantConfig:
             raise ValueError("graf_ogrenen_agirligi [0, 5] aralığında olmalı")
         if self.graf_ogrenen_agirligi and not self.graf_ogrenen_enabled:
             raise ValueError("graf_ogrenen_agirligi > 0 için graf_ogrenen_enabled açık olmalı")
+        if self.sema_kanal_duzeyi and not self.sema_farkindaligi:
+            raise ValueError("sema_kanal_duzeyi için sema_farkindaligi açık olmalı (A-3, A-2'nin üstüne gelir)")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

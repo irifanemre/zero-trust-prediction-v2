@@ -23,6 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
 
+from ztp.schema import SOURCE_ALIAS
 from ztp.schema_profiler import TUREV_BAGIMLILIK, OzellikHaritasi
 
 LOG = logging.getLogger(__name__)
@@ -128,13 +129,17 @@ class KuralDurumu:
     degerlendirilebilir: bool
     eksik_sinyaller: Tuple[str, ...] = ()
     eksik_alanlar: Tuple[str, ...] = ()
+    kanallar: Tuple[str, ...] = ()  # A-3: kuralın beyan ettiği kanallar (boşsa alan düzeyi karar)
 
     @property
     def neden(self) -> str:
         if self.degerlendirilebilir:
             return ""
         s = ", ".join(f"`{x}`" for x in self.eksik_sinyaller)
-        a = ", ".join(f"`{x}`" for x in self.eksik_alanlar)
+        if self.kanallar:  # A-3: eksik olan alan değil, alanın O KANALDAKİ hâli
+            a = ", ".join(f"`{x}@{k}`" for x in self.eksik_alanlar for k in self.kanallar)
+        else:
+            a = ", ".join(f"`{x}`" for x in self.eksik_alanlar)
         return f"şema: {s} üretilemiyor (eksik alan: {a})"
 
     def ozet(self) -> dict:
@@ -143,6 +148,7 @@ class KuralDurumu:
             degerlendirilebilir=self.degerlendirilebilir,
             eksik_sinyaller=list(self.eksik_sinyaller),
             eksik_alanlar=list(self.eksik_alanlar),
+            kanallar=list(self.kanallar),
             neden=self.neden,
         )
 
@@ -175,12 +181,30 @@ class MevcudiyetHaritasi:
         )
 
 
-def kural_mevcudiyeti(katalog: Sequence[dict], harita: OzellikHaritasi) -> MevcudiyetHaritasi:
+def kural_kanallari(kural: dict) -> Tuple[str, ...]:
+    """Kuralın beyan ettiği kanallar, olay tablosundaki `source` adlarına çevrilmiş (A-3).
+
+    Kaynak adı kataloğda iş dilindedir (`ad_oturum`, `dosya_sunucu`); olay tablosunda teknik
+    (`ad`, `file_server`). Motorun kullandığı `SOURCE_ALIAS` çevirisinin aynısı kullanılır — ayrı
+    bir çeviri tablosu tutmak, iki tablonun sessizce ayrışması demekti.
+
+    `_internal` (kuralın kendi risk serisinden beslenmesi) kanal sayılmaz: şemaya bağlı değildir.
+    """
+    kanallar = {SOURCE_ALIAS.get(k, k) for k in kural.get("veri_kaynaklari", ())}
+    return tuple(sorted(kanallar - {"_internal"}))
+
+
+def kural_mevcudiyeti(katalog: Sequence[dict], harita: OzellikHaritasi, kanal_duzeyi: bool = False) -> MevcudiyetHaritasi:
     """Her kural için: koşullarındaki sinyaller bu veri setinde üretilebiliyor mu?
 
     Bir kural **ancak koşullarındaki TÜM veri bağımlı sinyaller** üretilemiyorsa ölü sayılır.
     Kısmen üretilebilen kural çalışmaya devam eder: `UEBA-0017` gibi `or`'lu bir kuralda bir kol
     ölse bile diğeri tetikleyebilir. Fazla agresif kapatmak, gerçek tespiti susturmak demektir.
+
+    `kanal_duzeyi` (A-3) açıksa sinyal, kuralın BEYAN ETTİĞİ kanallarda aranır. Aynı "kısmen ölü
+    yaşar" kuralı kanallara da uygulanır: kural, beyan ettiği kanalların **hepsinde** ölüyse ölüdür.
+    Bir kanalda ölmesi yetmez — `UEBA-0021` hem `proxy` hem `email` okur, biri boşsa diğeri
+    tetikleyebilir.
     """
     out = MevcudiyetHaritasi(veri_seti=harita.veri_seti)
     for kural in katalog:
@@ -191,16 +215,25 @@ def kural_mevcudiyeti(katalog: Sequence[dict], harita: OzellikHaritasi) -> Mevcu
         if not veri_bagimli:
             out.kurallar[kural["id"]] = KuralDurumu(kural["id"], True)
             continue
-        eksik = {s for s in veri_bagimli if not harita.turev_uretilebilir(SINYAL_TUREV[s])}
-        tamami_olu = eksik == veri_bagimli
+        kanallar = kural_kanallari(kural) if (kanal_duzeyi and harita.kanallar) else ()
+        # Kanal yoksa (ya da bayrak kapalıysa) tek "kanal" None demektir: alan düzeyi karar.
+        bakilacak = kanallar or (None,)
+        # Her kanalda ayrı karar; kural kanalların HEPSİNDE ölüyse ölü. `any` ile birleştirmek,
+        # tek boş kanalın kuralı susturmasına yol açardı.
+        eksik_kanalda = {k: {s for s in veri_bagimli if not harita.turev_uretilebilir(SINYAL_TUREV[s], k)} for k in bakilacak}
+        olu_kanallar = [k for k, eksik in eksik_kanalda.items() if eksik == veri_bagimli]
+        tamami_olu = len(olu_kanallar) == len(bakilacak)
+        eksik = set.union(*eksik_kanalda.values()) if tamami_olu else set.intersection(*eksik_kanalda.values())
         alanlar: Set[str] = set()
         for s in eksik:
-            alanlar |= {a for a in TUREV_BAGIMLILIK.get(SINYAL_TUREV[s], ()) if not harita.kullanilabilir(a)}
+            for k in bakilacak:
+                alanlar |= {a for a in TUREV_BAGIMLILIK.get(SINYAL_TUREV[s], ()) if not harita.kullanilabilir(a, k)}
         out.kurallar[kural["id"]] = KuralDurumu(
             kural["id"],
             degerlendirilebilir=not tamami_olu,
             eksik_sinyaller=tuple(sorted(eksik)),
             eksik_alanlar=tuple(sorted(alanlar)),
+            kanallar=kanallar,
         )
     return out
 

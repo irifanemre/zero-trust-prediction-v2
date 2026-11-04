@@ -111,10 +111,16 @@ class ZeroTrustPredictionPipeline:
         """Faz A-2: hangi kural bu veri setinde SINANABİLİR. Bayrak kapalıysa profilleme bile yapılmaz."""
         if not getattr(self.cfg, "sema_farkindaligi", False):
             return None
-        harita = profille(getattr(self.data, "name", "?"), events=self.data.events)
-        m = kural_mevcudiyeti(self.catalog, harita)
+        kanal = bool(getattr(self.cfg, "sema_kanal_duzeyi", False))
+        harita = profille(getattr(self.data, "name", "?"), events=self.data.events, kanal_duzeyi=kanal)
+        m = kural_mevcudiyeti(self.catalog, harita, kanal_duzeyi=kanal)
         if m.olu:
-            LOG.warning("Şema farkındalığı: %d kural bu veri setinde sınanamaz — %s", len(m.olu), sorted(m.olu))
+            LOG.warning(
+                "Şema farkındalığı (%s): %d kural bu veri setinde sınanamaz — %s",
+                "kanal düzeyi" if kanal else "alan düzeyi",
+                len(m.olu),
+                sorted(m.olu),
+            )
         for u in harita.uyarilar:
             LOG.warning("Şema uyarısı: %s", u)
         (self.out / "sema-profili.json").write_text(

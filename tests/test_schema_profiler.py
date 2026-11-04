@@ -89,18 +89,26 @@ def test_olmayan_dosya_bos_doner(tmp_path):
 # ---------------------------------------------------------------- asıl hata: r6.2
 
 
-def test_r62_deseni_content_kolonu_eksik(tmp_path):
-    """Ölçülmüş hatanın yeniden üretimi: `http.csv`'de `content` yoksa UYARI çıkmalı."""
+def test_http_content_kolonu_UYARI_degil_NOT(tmp_path):
+    """DÜZELTİLDİ (Faz A-3): `http.csv:content`'in yokluğu uyarı değil nottur.
+
+    İlk teşhis şöyleydi: "r6.2'nin `http.csv`'sinde `content` yok → `UEBA-0003` web tarafında ölü."
+    Yarısı doğruydu. Ölçüm gösterdi ki `cert.py` `content`'i HİÇBİR sürümde okumuyor (4.2 etik
+    sınır / 20.1 amaçla sınırlılık: sayfa metni hacim vekili değildir). Yani r4.2'de kolon VARKEN
+    de web `bytes_out`'u sıfırdır.
+
+    Kolonun varlığı sonucu değiştirmediği için eksikliği kural öldüren bir eksik DEĞİLDİR.
+    """
     (tmp_path / "http.csv").write_text("id,date,user,pc,url\n", encoding="utf-8")
     h = profille("sahte-r6.2", ham_dizin=tmp_path, ham_dosyalar=["http.csv"])
-    assert any("content" in u and "bytes_out" in u for u in h.uyarilar)
-    assert h.notlar == []
+    assert h.uyarilar == []
+    assert any("content" in n and "BİLİNÇLİ" in n for n in h.notlar)
 
 
 def test_r42_deseni_content_var_uyari_yok(tmp_path):
     (tmp_path / "http.csv").write_text("id,date,user,pc,url,content\n", encoding="utf-8")
     h = profille("sahte-r4.2", ham_dizin=tmp_path, ham_dosyalar=["http.csv"])
-    assert h.uyarilar == []
+    assert h.uyarilar == [] and h.notlar == []
 
 
 def test_ayristiricinin_ele_aldigi_fark_uyari_degil_NOT(tmp_path):

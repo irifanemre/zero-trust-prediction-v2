@@ -1,5 +1,11 @@
 # Faz A-2 — şema farkındalığı karar yoluna bağlandı: sonuçlar
 
+> **Sonradan düzeltme (Faz A-3, aynı gün).** Aşağıda ölçüt 3'ün kalma sebebi "r6.2'nin
+> `http.csv`'sinde `content` kolonu yok" diye anlatılıyor. Bu **eksik**: `cert.py` `content`'i
+> **hiçbir** sürümde okumaz (4.2 etik sınır), yani r4.2'de kolon varken de web `bytes_out`'u
+> sıfırdır. Asıl sebep kolonun yokluğu değil, **web hacminin CERT'te hiç ölçülmemesi**. Tam
+> açıklama: `docs/faz-a3-sonuclar.md`.
+
 **Ölçüm: 31 Ekim 2026.** Ön kayıt: `docs/faz-a2-on-kayit.md` (ölçümden önce yazıldı).
 Dondurma: `kurallar-donduruldu-v8` → `donmuş durumla aynı`. 376 test geçiyor.
 

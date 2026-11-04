@@ -92,3 +92,31 @@ uzunluğundan türettiği için r6.2'de **her web olayının `bytes_out` değeri
 Bu, r6.2 kör koşusunun sonuçlarını okurken bilinmesi gereken bir sınırdır: o koşuda web
 sızdırması hacim üzerinden **ölçülmemiştir**. r6.2'de `bytes_out`'a katkı veren kaynaklar
 yalnızca e-posta (`size` alanı gerçektir) ve taşınabilir medyaya dosya kopyalarıdır.
+
+---
+
+## Düzeltme — 31 Ekim 2026 (Faz A-3 ölçümü)
+
+Yukarıda yanlış bir önerme var ve **gerekçeyi tersine çeviriyor**:
+
+> "r4.2'nin `http.csv` dosyasında `content` kolonu VAR. Yani orada `UEBA-0003` (veri hacmi) normal
+> çalışıyor ve bu kuralın doldurduğu boşluk r4.2'de mevcut değil."
+
+**Kolon var ama OKUNMUYOR.** `cert.py` `http.csv`'den yalnız `id, date, user, pc, url` okur;
+`content` bilinçli olarak dışarıda (4.2 etik sınır / 20.1 amaçla sınırlılık — sayfa metni hacim
+vekili sayılmaz). Dolayısıyla **web `bytes_out`'u her CERT sürümünde sıfırdır**, r4.2 dahil.
+
+| Yukarıda yazılan | Ölçülen (31 Ekim) |
+|---|---|
+| r4.2'de web hacmi var → boşluk yok | r4.2'de de web hacmi **yok** → boşluk **var** |
+| Boşluk yalnız r6.2'de ortaya çıkıyor | Boşluk **her CERT koşusunda** var |
+
+Sonucun yönü değişiyor: `UEBA-0022`'nin doldurduğu boşluk r4.2'de de mevcuttu. "r4.2 bu kuralın
+faydasını ölçemez" sonucu **yine geçerli**, ama artık gerekçesi tek: r4.2'nin 34 senaryosunun 31'i
+USB'ye bağımlıdır, yani bulut yükleme senaryosu orada neredeyse yok. İkinci gerekçe düşüyor.
+
+`UEBA-0003`'ün r4.2'de tetiklenmesi (skor payı 0,68) web hacminden değil, **e-posta ve dosya
+baytlarından** gelir: `veri_hacmi_z`, günün tüm kanallarındaki `bytes_out` toplamıdır
+(`features.py:61`, kaynak filtresi yok).
+
+Ayrıntı: `docs/faz-a3-sonuclar.md`.
