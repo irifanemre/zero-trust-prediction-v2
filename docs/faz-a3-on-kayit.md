@@ -109,3 +109,68 @@ Kanal düzeyi çözünürlük `bytes_out@proxy` gibi **alan × kaynak** çiftind
 kırılımlar (ör. `bytes_out@proxy@dropbox.com`) **yapılmayacak**: o noktada şema profili, kuralın
 kendisini yeniden yazmaya başlar ve mekanizmanın ölçtüğü şey ("veri var mı") ile kuralın ölçtüğü
 şey ("davranış anormal mi") birbirine karışır.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (31 Ekim 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/faz-a3-sonuclar.md`.
+
+## Sapma 1 — ön kayıtın "beyanı esas alıyoruz" KARARI ÇÜRÜDÜ
+
+Yukarıdaki "Aşırı kapatma riski" bölümünün 2. maddesi şöyle karar vermişti:
+
+> "Kuralın `veri_kaynaklari`'nda yazılı kanallar ölüyse ölüdür. Kural yazarı hangi kanala
+> baktığını orada beyan etmiştir; beyanı esas alıyoruz."
+
+**Ölçüm bunu çürüttü.** `veri_hacmi_z` kanallar arası günlük toplamdır (`features.py:61`, kaynak
+filtresi yok). `veri_kaynaklari` üretimde hangi telemetrinin **gerektiğini** beyan eder, sinyalin
+hangi kanalı **topladığını** beyan etmez. Beyanı esas almak r4.2'de `UEBA-0003`'ü yanlışlıkla
+kapattı ve ölçüt 4 kaldı.
+
+Düzeltme: kanallar arası toplanan alanlar kanal kararından muaf (`KANALLAR_ARASI`). Düzeltme
+**ölçüm görüldükten sonra** yapıldı; dayanağı üretim kodudur (`features.py:61` vs 68/73/75), etiket
+ya da sonuç değil. Yine de sıra bu: önce ölçüt kaldı, sonra kod değişti. Kayda geçiyor.
+
+## Sapma 2 — kanal içi TEKİLLİK ölçümü kaldırıldı (ölçüt 4'ün ikinci kalması)
+
+İlk sürüm tekilliği kanal başına ölçtü ve yapısal olarak sabit alanları ("`source` kendi grubunda
+tek değerli", "`action` `dlp`'de hep `usb_copy`") eksik saydı. r4.2'de 5 kural ölü ilan edildi;
+aralarında **`UEBA-0017`**, yani 34 senaryonun 31'inin dayandığı USB kuralı vardı.
+
+Düzeltme: tekillik alan düzeyinden alınır, kanal yalnız doluluğu söyler. Sonra r4.2'de 5 → 2 ölü
+kural ve ölçüt 4 geçti. Bu sapma ön kayıtta öngörülmemişti — "aşırı kapatma riski" başlığı riski
+doğru işaret ediyordu ama bu mekanizmayı değil.
+
+## Sapma 3 — ÖLÇÜT 3 KALDI ve mekanizma BU SEFER GENİŞLETİLMEDİ
+
+r6.2'de `UEBA-0003` kanal düzeyinde de ölü raporlanmadı, çünkü doğru cevap "ölü" değil. Ön kayıt
+"ölçüt 3 ve 4 birlikte geçmezse mekanizma işe yaramıyor demektir" diyordu. Karar buna uyuldu:
+**bayrak varsayılan kapalı**, mekanizma silinmedi (kanala özel sinyallerde çalışıyor ve testli),
+S5'i yakalamak için gereken şey bu katmanda değil — kanal bazlı bir hacim ÖZELLİĞİ gerekiyor.
+
+## Sapma 4 — ön kayıtın 4. beklentisi kısmen doğru çıktı, kısmen yanlış
+
+Ön kayıt şöyle yazmıştı:
+
+> "En olası başarısızlık: `veri_kaynaklari` beyanları kuralın gerçekte okuduğu kanallarla
+> uyuşmuyor olabilir. O hâlde ölçüt 4 kalır ve **mekanizma değil katalog** düzeltilir."
+
+İlk yarısı **doğru çıktı** (ölçüt 4 tam bu yüzden kaldı). İkinci yarısı **yanlıştı**: katalog
+düzeltilmedi, çünkü `UEBA-0003`'ün `proxy` beyanı yanlış değil — üretimde o kural gerçekten proxy
+telemetrisi ister. Hatalı olan, beyandan "sinyal yalnız bu kanalı toplar" sonucunu çıkarmaktı.
+Yani düzeltilen **mekanizmanın çıkarımı** oldu, ne katalog ne de beyan.
+
+## Sapma 5 — doğrulama 30 günlük pencereyle yapıldı
+
+A-2'nin 4. sapmasının aynısı: şema kararı pencereden bağımsızdır (harita motor kurulurken, tek gün
+işlenmeden hesaplanır), senaryo sayımı değildir. r4.2'de 2, r6.2'de 1 senaryo pencereye düştü;
+`ölçülebilir 2 · ÖLÇÜLEMEZ 0` satırları **kapsama oranı iddiası değildir**.
+
+## Sapma 6 — ölçüm 4 Kasım'da yeniden üretildi
+
+31 Ekim'deki A-3 uygulaması commit edilmeden önce çalışma kopyası harici bir sebeple A-2 öncesi
+bir duruma döndü (altı commit'li dosya diskten silinmişti; hepsi `origin/main`'de duruyordu).
+Uygulama 4 Kasım'da yeniden yazıldı ve **iki ölçüm de yeniden koşuldu**: r4.2 ve r6.2 için şema
+kararı 31 Ekim'deki ile **birebir aynı** çıktı. Bu metin, ölçümlerin ilk yapıldığı tarihle
+(31 Ekim) etiketli kalıyor.
