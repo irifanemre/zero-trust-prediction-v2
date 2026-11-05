@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
@@ -20,6 +21,8 @@ from ztp.schema import (
     OCSF_NETWORK,
     OCSF_PROCESS,
 )
+
+LOG = logging.getLogger(__name__)
 
 # sabit varsayılan bitiş günü: sentetik regresyon koşu tarihine (bugüne) bağlı olmasın — aynı tohum her gün aynı sonucu verir
 SYNTHETIC_DEFAULT_END = pd.Timestamp("2026-09-16")
@@ -971,9 +974,55 @@ class SyntheticOrg:
                 cmdline="robocopy /MIR",
             )
 
+    def senaryo_kapsamasi(self) -> dict:
+        """Senaryoların değerlendirme penceresini ne kadarını kapladığı — test aracının bilinen sınırı.
+
+        Ölçülmüş kusur (`docs/faz-c2-sonuclar.md`): senaryo olay günleri `E0+6 … E0+21` aralığında,
+        yani pencere uzunluğundan BAĞIMSIZ 15 günlük sabit bir bant. Pencere uzadıkça bant oransal
+        olarak başa sıkışıyor ve ikinci yarıda hiç pozitif kalmıyor:
+
+        | pencere | 1g ufukta değerlendirme pozitifi |
+        |---|---|
+        | 24 gün | 54 |
+        | 40 gün | 11 |
+        | 60 gün | **0** |
+
+        Sonucu: zamansal bölme gerektiren hiçbir ölçüm (kalibrasyon, sürüklenme, ısınma etkisi)
+        uzun pencerede yapılamaz. Faz C-2a'da 14 günlük ufuk tam bu yüzden ölçülemedi.
+
+        Düzeltilmedi çünkü senaryo zamanlamasını değiştirmek üretecin tanımlarını yeniden düzenlemek
+        demek ve her sentetik kapsama rakamı ona dayanıyor. Bunun yerine sınır **ölçülebilir** hâle
+        getirildi: ölçüm betikleri bu fonksiyonu çağırıp uyarı basıyor, böylece sessizce tuzağa
+        düşülmüyor. CERT ölçümleri etkilenmiyor — orada senaryolar gerçek cevap anahtarından gelir.
+        """
+        if not self.ground_truth:
+            return dict(senaryo=0, kapsama_orani=None, uyari=None)
+        olaylar = [g["olay_gunu"] - self.E0 for g in self.ground_truth]
+        ilk, son = min(olaylar), max(olaylar)
+        oran = (son - ilk + 1) / self.eval_days if self.eval_days else None
+        son_oran = (son + 1) / self.eval_days if self.eval_days else None
+        uyari = None
+        if son_oran is not None and son_oran < 0.75:
+            uyari = (
+                f"senaryoların hepsi pencerenin ilk %{100 * son_oran:.0f}'inde "
+                f"(olay günleri E0+{ilk} … E0+{son}, pencere {self.eval_days} gün) — "
+                "zamansal bölme gerektiren ölçümler bu pencerede YANILTICI"
+            )
+        return dict(
+            senaryo=len(self.ground_truth),
+            ilk_olay=ilk,
+            son_olay=son,
+            eval_days=self.eval_days,
+            bant_orani=round(oran, 3) if oran else None,
+            kapsama_orani=round(son_oran, 3) if son_oran else None,
+            uyari=uyari,
+        )
+
     def build(self) -> Dataset:
         self._make_directory()
         self._apply_scenarios()
+        if (k := self.senaryo_kapsamasi())["uyari"]:
+            LOG.warning("Sentetik test aracı sınırı: %s", k["uyari"])
         leases = self._make_leases()
         rows: list = []
         lease_cache: dict = {}

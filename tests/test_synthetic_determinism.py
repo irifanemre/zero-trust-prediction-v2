@@ -50,3 +50,45 @@ def test_s8_result_independent_of_run_date(tmp_path, end):
     assert s8["sonuc"] == "GEÇTİ", s8
     assert "PRED-0013" in s8["gercek_sonuc"]
     assert s9["sonuc"].startswith("GEÇTİ"), s9  # negatif kontrol de güne bağlı olarak yanlış pozitife dönmemeli
+
+
+def test_senaryo_kapsamasi_uzun_pencerede_UYARIR():
+    """Test aracının bilinen sınırı sessizce tuzağa düşülemez olmalı.
+
+    Ölçülmüş kusur (`docs/faz-c2-sonuclar.md`): senaryo olay günleri pencere uzunluğundan BAĞIMSIZ,
+    `E0+2 … E0+22` aralığında sabit bir bant. Pencere uzadıkça bant başa sıkışıyor:
+
+    | pencere | 1 günlük ufukta değerlendirme pozitifi |
+    |---|---|
+    | 24 gün | 54 |
+    | 40 gün | 11 |
+    | 60 gün | **0** |
+
+    Faz C-2a'da 14 günlük ufuk tam bu yüzden ölçülemedi ve ön kayıttaki çözüm ("pencereyi büyüt")
+    sorunu BÜYÜTTÜ. Kusur düzeltilmedi — senaryo zamanlamasını değiştirmek üretecin tanımlarını
+    yeniden düzenlemek demek ve her sentetik kapsama rakamı ona dayanıyor. Bunun yerine sınır
+    ölçülebilir ve uyarılabilir hâle getirildi.
+
+    Bu test, uyarının çalıştığını ve kısa pencerede yanlış alarm vermediğini bağlar.
+    """
+    import pandas as pd
+
+    from ztp.config import TenantConfig
+    from ztp.data.synthetic import SyntheticOrg
+
+    uzun = TenantConfig().long_window_days
+    end = pd.Timestamp("2026-09-16")
+
+    kisa = SyntheticOrg(n_users=20, n_days=uzun + 34, eval_days=24, end_day=end, seed=7)
+    kisa.build()
+    k = kisa.senaryo_kapsamasi()
+    assert k["uyari"] is None, "kısa pencerede yanlış alarm olmamalı"
+    assert k["kapsama_orani"] > 0.9
+
+    uzun_pencere = SyntheticOrg(n_users=20, n_days=uzun + 70, eval_days=60, end_day=end, seed=7)
+    uzun_pencere.build()
+    u = uzun_pencere.senaryo_kapsamasi()
+    assert u["uyari"] is not None and "YANILTICI" in u["uyari"]
+    assert u["kapsama_orani"] < 0.5, "60 günlük pencerede senaryolar ilk yarıda bile değil"
+    # bant uzunluğu pencereden BAĞIMSIZ: kusurun tanımı bu
+    assert (u["son_olay"] - u["ilk_olay"]) == (k["son_olay"] - k["ilk_olay"])
