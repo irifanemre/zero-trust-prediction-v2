@@ -64,7 +64,7 @@ class TenantConfig:
     # 20.1 takma adlaştırma anahtarı (üretimde KMS/vault'tan gelir)
     pseudonym_secret: str = "degistir-bu-anahtari"
     # 11.1 kademeli işlevsellik: bu müşteride mevcut log kaynakları
-    available_sources: Tuple[str, ...] = ("ad", "hr", "proxy", "edr", "vpn", "file_server", "dlp")
+    available_sources: Tuple[str, ...] = ("ad", "hr", "proxy", "edr", "vpn", "file_server", "dlp", "email")
     # 11.6 kritik varlıklar (graf analizi hedefleri)
     critical_assets: Tuple[str, ...] = ()
     # 12.5 müşteri bastırma kuralları: [{rule_id, sid|pseudonym, start, end, reason, owner}]
@@ -169,6 +169,12 @@ class TenantConfig:
     # kanallarda aranır. `sema_farkindaligi`'nın üstüne gelen, daha agresif bir kapatmadır —
     # o yüzden ayrı bayrak: A-2'nin ölçülmüş davranışı ölçülmemişle karışmasın.
     sema_kanal_duzeyi: bool = False
+    # NOT: `available_sources` varsayılanı v10'da `email` ile tamamlandı. Öncesinde `UEBA-0023`,
+    # katalogdaki 25 kuraldan varsayılan yapılandırmada "kaynak yok" diye devre dışı kalan TEK
+    # kuraldı — sinyali ne kadar güçlü olursa olsun hiç değerlendirilmiyordu. CERT kör koşuları
+    # etkilenmemişti çünkü `kor_kosu_r52.py` listeyi veriden türetiyor; ama varsayılanı kullanan
+    # her test onu susturuyordu. Liste bir DAĞITIM gerçeğidir: e-posta ağ geçidi olmayan kurum
+    # kendi listesini verir ve kural orada yine çalışmaz (`docs/v10-sonuclar.md`).
 
     def __post_init__(self) -> None:
         if self.alarm_budget_per_day < 1:

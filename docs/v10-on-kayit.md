@@ -108,3 +108,51 @@ geçerse kural sağır olmuş olabilir.
    edilen bir eksikliktir**, gizlenmiyor.
 4. **En olası sessiz hata:** taban yükseltilince kural *hiç* tetiklenmez ve bu "düzeldi" gibi
    görünür. Ölçüt 3 (S11 hâlâ tetiklenmeli) tam bunun için var.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (5 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/v10-sonuclar.md`.
+
+## Sapma 1 — B maddesi YAPILMADI: türetme kuralı kendi sınamasını geçemedi
+
+Kural `bytes_out` için 50 MB üretti; bilinen-iyi sabit 5 MB, yani ±3 kat sınırının **dışında**
+(10×). Ölçüt 1 "üretmezse kural yanlıştır ve `EPOSTA_TABAN` değiştirilmez" diyordu; değiştirilmedi.
+
+Bu bir sapma değil, **ön kaydın tasarlandığı gibi çalışması**. Doğrulama sınaması tam bu amaçla
+yazılmıştı: eşiği gözle ayarlamanın önüne geçmek. Sınama olmasaydı 10 kat yanlış bir kural
+"türetildi" diye uygulanacaktı.
+
+Başarısızlığın öğrettiği yapısal bilgi ön kayıt yazılırken bilinmiyordu: taban `max(mad, floor)`
+içinde durduğu için **yalnız kendi MAD'i tabandan küçük olan kullanıcılarda bağlar**. Dolayısıyla
+referansı "tipik MAD" olamaz — tipik MAD'e eşit bir taban nüfusun yarısında bağlayıcı olur.
+Referans, MAD dağılımının **alt ucu** olmalıydı.
+
+## Sapma 2 — ön kayıt dışı keşif: 13 sabite karşı aday kural taraması
+
+Ön kayıt tek referans noktası (`bytes_out`) öngörmüştü. Kural kalınca `FEATURE_FLOOR`'daki **13**
+sabitin hepsine karşı yedi aday kural denendi. "En küçük sıfır olmayan MAD" 9/10 sabiti ±3 kat
+içinde yeniden üretiyor (medyan oran 1,00) ve yukarıdaki yapısal gerekçeyle tutarlı.
+
+**Bu kural UYGULANMADI** ve uygulanmaması bilinçli: yedi aday arasından **sonuçlar görüldükten
+sonra** seçildi, yani doğrulama kümesi üzerinde model seçimi yapıldı. On nokta ve yedi adayla bir
+uyum bulmak güçlü kanıt değil. Hipotez olarak kayda geçiyor; sınanması ayrı bir ön kayıtla,
+tercihen CERT'in gerçek dağılımları üzerinde yapılacak.
+
+## Sapma 3 — ölçüt 2–5 değerlendirilmedi
+
+Eşik değişmediği için ölçülecek bir şey kalmadı. Ölçütler "eşik değişirse şunlar sağlanmalı"
+biçiminde yazılmıştı; ön koşul gerçekleşmedi. Düşen ölçütler kayda geçiyor ki ileride eşik
+türetildiğinde aynı eşiklerle sınanabilsin.
+
+## Sapma 4 — eşik sorusunun istatistiksel olmadığı anlaşıldı
+
+Ön kayıt sabiti veriden türetmeyi planlıyordu. Ölçüm bunun — en azından tek bir sentetik nüfustan
+ve post-hoc seçilmemiş bir kuralla — mümkün olmadığını gösterdi. Soru şuna indi:
+
+> Bir günde, normalinin ne kadar üstüne çıkan dış e-posta hacmi bir analistin zamanına değer?
+
+Bu bir **operasyonel karar**, türetilecek bir sayı değil. Hedef ortamın e-posta ağ geçidinden
+alınacak bir aylık hacim dağılımı doğru girdidir. O zamana kadar kural gölge modda kalıyor:
+risk kontrol altında, sorun çözülmemiş — ikisi karıştırılmamalı.

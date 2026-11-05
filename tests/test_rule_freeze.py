@@ -11,7 +11,8 @@ import pytest
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v9.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v10.json"
+V9 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v9.json"
 V8 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
 V7 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
 V6 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v6.json"
@@ -28,8 +29,8 @@ def test_rules_match_frozen_manifest():
 
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(m["degerler"]["kurallar"]) == 25  # v8/v9 kural EKLEMEZ: v7'nin 25 kuralı aynı
-    assert m["etiket"] == "kurallar-donduruldu-v9"
+    assert len(m["degerler"]["kurallar"]) == 25  # v8/v9/v10 kural EKLEMEZ: v7'nin 25 kuralı aynı
+    assert m["etiket"] == "kurallar-donduruldu-v10"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -196,7 +197,7 @@ def test_v9_kanal_duzeyi_ve_duzeltilmis_teshis():
     kararın dışında bırakıldı, (3) `http.csv:content` kritik olmaktan çıktı — kolon varken de
     okunmadığı ölçüldü, dolayısıyla yokluğu bir eksik değil.
     """
-    v8, v9 = (json.loads(p.read_text(encoding="utf-8")) for p in (V8, MANIFEST))
+    v8, v9 = (json.loads(p.read_text(encoding="utf-8")) for p in (V8, V9))
     assert v8["degerler"]["kurallar"] == v9["degerler"]["kurallar"]
     assert set(v9["dosyalar"]) == set(v8["dosyalar"]), "v9 donmuş kümeye dosya EKLEMEZ"
     degisen = {f for f in v8["dosyalar"] if v9["dosyalar"].get(f) != v8["dosyalar"][f]}
@@ -209,3 +210,38 @@ def test_v9_kanal_bayragi_varsayilanda_kapali_ve_A2_gerektirir():
     assert TenantConfig().sema_kanal_duzeyi is False
     with pytest.raises(ValueError, match="sema_farkindaligi açık olmalı"):
         TenantConfig(sema_kanal_duzeyi=True)
+
+
+def test_v10_kaynak_listesi_tamamlandi_esik_DEGISMEDI():
+    """v10 yalnız varsayılan kaynak listesini tamamlar; hiçbir eşik değişmedi.
+
+    Ön kayıt (`docs/v10-on-kayit.md`) iki iş planlamıştı: (A) varsayılana `email`, (B) `EPOSTA_TABAN`'ın
+    türetme kuralıyla yeniden hesaplanması. **B YAPILMADI**: türetme kuralı, ön kayıtta yazılan
+    kendi doğrulama sınamasını geçemedi — `bytes_out` için 50 MB üretti, bilinen-iyi sabit 5 MB,
+    yani ±3 kat sınırının dışında. Ölçüt 1 "üretmezse EPOSTA_TABAN değişmez" diyordu.
+    """
+    from ztp.config import TenantConfig
+    from ztp.profile import EPOSTA_TABAN
+
+    v9, v10 = (json.loads(p.read_text(encoding="utf-8")) for p in (V9, MANIFEST))
+    assert v9["degerler"]["kurallar"] == v10["degerler"]["kurallar"]
+    degisen = {f for f in v9["dosyalar"] if v10["dosyalar"].get(f) != v9["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py"}, f"v10 yalnız config.py'yi değiştirir, değişen: {degisen}"
+    assert EPOSTA_TABAN == 50_000, "eşik ön kayıt gereği DEĞİŞMEDİ — türetme kuralı sınamayı geçemedi"
+    assert "email" in TenantConfig().available_sources
+
+
+def test_v10_varsayilan_hicbir_kurali_devre_disi_birakmaz():
+    """Sözleşme: varsayılan yapılandırma kataloğun TAMAMINI değerlendirebilmeli.
+
+    `UEBA-0023` v8'den v10'a kadar "kaynak yok" diye sessizce devre dışıydı ve bu, eşiğinin iki kez
+    yanlış teşhis edilmesine yol açtı (`docs/faz-b-sonuclar.md`). Bir kural varsayılanda devre dışı
+    kalacaksa bu bilinçli bir karar olmalı — sessiz bir eksik olmamalı.
+    """
+    from ztp.config import TenantConfig
+    from ztp.detection.catalog import load_catalog
+    from ztp.detection.engine import DetectionEngine
+
+    e = DetectionEngine(TenantConfig(), load_catalog())
+    assert e.disabled == {}, f"varsayılanda devre dışı kural: {e.disabled}"
+    assert len(e.rules) == 25
