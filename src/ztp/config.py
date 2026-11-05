@@ -169,6 +169,14 @@ class TenantConfig:
     # kanallarda aranır. `sema_farkindaligi`'nın üstüne gelen, daha agresif bir kapatmadır —
     # o yüzden ayrı bayrak: A-2'nin ölçülmüş davranışı ölçülmemişle karışmasın.
     sema_kanal_duzeyi: bool = False
+    # --- v11: kullanılmayan günlük bütçe devreder. Faz D ölçtü ki düzgün dağıtım kapasitenin
+    # %18'ini kullanmıyor (120 kullanıcıda kuyruk medyanı 5, bütçe 6) ve o boş slotları kuyruğun
+    # uzun olduğu günlere taşımak aynı toplam kapasiteyle +3 insider-günü kazandırıyor.
+    # Devir İLERİYE BAKMAZ: yalnız geçmişte kullanılmayan kapasiteyi kullanır, tahmin gerektirmez.
+    butce_devretme: bool = False
+    # Devir tavanı (0 → günlük bütçe kadar). Sınırsız devir, uzun sessizlikten sonra tek günde
+    # kuyruğu patlatır; devir bir günlük ek kapasiteyle sınırlı tutulur.
+    butce_devir_tavani: int = 0
     # NOT: `available_sources` varsayılanı v10'da `email` ile tamamlandı. Öncesinde `UEBA-0023`,
     # katalogdaki 25 kuraldan varsayılan yapılandırmada "kaynak yok" diye devre dışı kalan TEK
     # kuraldı — sinyali ne kadar güçlü olursa olsun hiç değerlendirilmiyordu. CERT kör koşuları
@@ -262,6 +270,10 @@ class TenantConfig:
             raise ValueError("graf_ogrenen_agirligi > 0 için graf_ogrenen_enabled açık olmalı")
         if self.sema_kanal_duzeyi and not self.sema_farkindaligi:
             raise ValueError("sema_kanal_duzeyi için sema_farkindaligi açık olmalı (A-3, A-2'nin üstüne gelir)")
+        if self.butce_devir_tavani < 0:
+            raise ValueError("butce_devir_tavani negatif olamaz")
+        if self.butce_devir_tavani and not self.butce_devretme:
+            raise ValueError("butce_devir_tavani > 0 için butce_devretme açık olmalı")
         self.accumulator_windows = tuple(sorted({int(w) for w in self.accumulator_windows}))
         self.available_sources = tuple(self.available_sources)
         self.critical_assets = tuple(self.critical_assets)

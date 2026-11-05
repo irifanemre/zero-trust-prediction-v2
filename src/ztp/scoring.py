@@ -33,7 +33,8 @@ class RiskScorer:
         self.cfg, self.kg, self.labels = cfg, kg, labels
         self.hit_log: Dict[str, List[Hit]] = defaultdict(list)
         self.pool: deque = deque()  # (gün, ham skor) — son 90 günün tüm kullanıcı-günleri (sıfırlar dahil)
-        self.last_queued: Dict[str, pd.Timestamp] = {}  # açık vaka: yeni kanıt gelmeden yeniden kuyruğa alınmaz
+        self.last_queued: Dict[str, pd.Timestamp] = {}
+        self.devir_bakiyesi: int = 0  # v11: kullanılmayan bütçe (devretme bayrağı kapalıysa hiç okunmaz)  # açık vaka: yeni kanıt gelmeden yeniden kuyruğa alınmaz
         self.watch_by_day: Dict[pd.Timestamp, List[str]] = {}  # doğrulama kapısından geçemeyen adaylar (izleme listesi)
 
     def decay(self, age_days: int) -> float:
@@ -200,7 +201,20 @@ class RiskScorer:
         if self.cfg.kuyruk_dogrulama:
             self.watch_by_day[day] = [r.sid for r in normal if not self.corroborated(r)]
             normal = [r for r in normal if self.corroborated(r)]
-        chosen += [r.sid for r in normal][: self.cfg.alarm_budget_per_day]
+        # v11: kullanılmayan bütçe devreder. Faz D ölçtü ki düzgün dağıtım kapasitenin %18'ini
+        # kullanmıyor (kuyruk medyanı 5, bütçe 6) ve o boş slotları yoğun günlere taşımak +3
+        # insider-günü kazandırıyor (`docs/faz-d-sonuclar.md`). Devir yalnız GEÇMİŞTE kullanılmayan
+        # kapasiteyi kullanır — ileriye bakmaz, tahmin gerektirmez.
+        butce = self.cfg.alarm_budget_per_day
+        if getattr(self.cfg, "butce_devretme", False):
+            tavan = self.cfg.butce_devir_tavani if self.cfg.butce_devir_tavani > 0 else butce
+            ek = min(self.devir_bakiyesi, tavan)  # tavan: uzun sessizlikten sonra kuyruk patlamasın
+            butce = butce + int(ek)
+        alinan = [r.sid for r in normal][:butce]
+        if getattr(self.cfg, "butce_devretme", False):
+            # bakiye yalnız SIRADAN vakalardan hesaplanır; kritik istisna bütçeden bağımsızdır (13.5)
+            self.devir_bakiyesi = max(0, self.devir_bakiyesi + self.cfg.alarm_budget_per_day - len(alinan))
+        chosen += alinan
         for sid in chosen:
             self.last_queued[sid] = day
         return chosen

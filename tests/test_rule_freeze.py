@@ -11,7 +11,8 @@ import pytest
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v10.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v11.json"
+V10 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v10.json"
 V9 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v9.json"
 V8 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
 V7 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v7.json"
@@ -30,7 +31,7 @@ def test_rules_match_frozen_manifest():
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert len(m["degerler"]["kurallar"]) == 25  # v8/v9/v10 kural EKLEMEZ: v7'nin 25 kuralı aynı
-    assert m["etiket"] == "kurallar-donduruldu-v10"
+    assert m["etiket"] == "kurallar-donduruldu-v11"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -223,7 +224,7 @@ def test_v10_kaynak_listesi_tamamlandi_esik_DEGISMEDI():
     from ztp.config import TenantConfig
     from ztp.profile import EPOSTA_TABAN
 
-    v9, v10 = (json.loads(p.read_text(encoding="utf-8")) for p in (V9, MANIFEST))
+    v9, v10 = (json.loads(p.read_text(encoding="utf-8")) for p in (V9, V10))
     assert v9["degerler"]["kurallar"] == v10["degerler"]["kurallar"]
     degisen = {f for f in v9["dosyalar"] if v10["dosyalar"].get(f) != v9["dosyalar"][f]}
     assert degisen == {"src/ztp/config.py"}, f"v10 yalnız config.py'yi değiştirir, değişen: {degisen}"
@@ -245,3 +246,54 @@ def test_v10_varsayilan_hicbir_kurali_devre_disi_birakmaz():
     e = DetectionEngine(TenantConfig(), load_catalog())
     assert e.disabled == {}, f"varsayılanda devre dışı kural: {e.disabled}"
     assert len(e.rules) == 25
+
+
+def test_v11_butce_devretme_varsayilanda_kapali():
+    """v11 kullanılmayan bütçenin devretmesini ekler; kural/eşik/ağırlık değişmedi.
+
+    Faz D ölçtü ki düzgün dağıtım kapasitenin %18'ini kullanmıyor (`docs/faz-d-sonuclar.md`).
+    Devretme o boş slotları yoğun günlere taşır ve ölçümde kapsamayı 7/8'den 8/8'e çıkardı
+    (`docs/v11-sonuclar.md`) — ama varsayılan KAPALI: iki farklı veride ölçülmeden açılmaz.
+    """
+    from ztp.config import TenantConfig
+
+    v10, v11 = (json.loads(p.read_text(encoding="utf-8")) for p in (V10, MANIFEST))
+    assert v10["degerler"]["kurallar"] == v11["degerler"]["kurallar"]
+    degisen = {f for f in v10["dosyalar"] if v11["dosyalar"].get(f) != v10["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py", "src/ztp/scoring.py"}
+    c = TenantConfig()
+    assert c.butce_devretme is False and c.butce_devir_tavani == 0
+
+
+def test_v11_devretme_kapasite_YARATMAZ(tmp_path):
+    """Sözleşme: devretme bütçeyi kaydırır, artırmaz. Ön kayıt ölçütü 2 — doğruluk kontrolü.
+
+    Tavan olmadan devir, uzun sessizlikten sonra tek günde kuyruğu patlatır; o yüzden günlük ek
+    kapasite `butce_devir_tavani` ile sınırlı.
+    """
+    import pandas as pd
+
+    from ztp.config import TenantConfig
+    from ztp.feedback import LabelStore
+    from ztp.graph.knowledge import KnowledgeGraph
+    from ztp.scoring import RiskResult, RiskScorer
+
+    # `kuyruk_dogrulama` kapatılır: bu test BÜTÇE TAVANINI sınıyor, kanıt çeşitliliğini değil —
+    # açık kalsa kanıtsız sahte sonuçların hepsi elenir ve tavan hiç sınanmaz.
+    cfg = TenantConfig(
+        tenant_id="t", pseudonym_secret="s", alarm_budget_per_day=3, butce_devretme=True, kuyruk_dogrulama=False
+    )
+    sc = RiskScorer(cfg, KnowledgeGraph(), LabelStore(tmp_path / "l.json"))
+    gun = pd.Timestamp("2026-03-01")
+    # iki sessiz gün (hiç aday yok) → bakiye 6 birikir, tavan 3 ile sınırlanır
+    for k in range(2):
+        assert sc.select_queue(gun + k * pd.Timedelta(days=1), {}) == []
+    assert sc.devir_bakiyesi == 6
+    yogun = {
+        f"S-{i}": RiskResult(
+            sid=f"S-{i}", raw=10.0 - i, base=1.0, multipliers={}, percentile=0.9, hits=[], contributions={}
+        )
+        for i in range(20)
+    }
+    kuyruk = sc.select_queue(gun + pd.Timedelta(days=2), yogun)
+    assert len(kuyruk) == 6, f"günlük tavan bütçe+tavan = 6 olmalı, alınan {len(kuyruk)}"
