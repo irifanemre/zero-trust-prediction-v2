@@ -10,21 +10,44 @@ import numpy as np
 import pandas as pd
 
 from ztp.data.dataset import Dataset
-from ztp.schema import CLOUD_APPS, EVENT_COLUMNS, OCSF_AUTH, OCSF_FILE, OCSF_HTTP, OCSF_NETWORK, OCSF_PROCESS
+from ztp.schema import (
+    CLOUD_APPS,
+    EVENT_COLUMNS,
+    OCSF_AUTH,
+    OCSF_EMAIL,
+    OCSF_FILE,
+    OCSF_HTTP,
+    OCSF_NETWORK,
+    OCSF_PROCESS,
+)
 
 # sabit varsayılan bitiş günü: sentetik regresyon koşu tarihine (bugüne) bağlı olmasın — aynı tohum her gün aynı sonucu verir
 SYNTHETIC_DEFAULT_END = pd.Timestamp("2026-09-16")
 WEEKDAY_FACTOR = {0: 1.15, 1: 1.0, 2: 1.0, 3: 1.0, 4: 0.9, 5: 0.35, 6: 0.35}  # 10.5 haftalık mevsimsellik
 DEPT_WEIGHTS = {"Finans": 0.14, "Muhasebe": 0.10, "IT": 0.16, "Satis": 0.20, "IK": 0.08, "ArGe": 0.20, "Operasyon": 0.12}
+# App sözcükleri tespit katmanının sözlüğüdür (`schema.py`: CLOUD_APPS / SENSITIVE_APPS) ve o sözlük
+# CERT'in `URL_CATEGORIES`'iyle aynıdır — birincil doğrulama kaynağı o.
+#
+# DİKKAT, ölçülmüş hata: burada eskiden `webmail` yazıyordu ve her bölümün normal iş uygulamasıydı
+# (7.714 olay, trafiğin %5,2'si). Ama `features.py:95` ile CERT'te `webmail` **kişisel** webmail
+# demek — gmail/yahoo/hotmail, yani kurumsal ağ geçidini atlama. Aynı kelime iki sözlükte zıt
+# anlamdaydı ve `UEBA-0024` sentetik veride 6 kez **kurumsal e-posta trafiğinde** tetikliyordu.
+# Kurumsal e-posta artık `corp_mail`: tespit katmanı onu tanımaz, çünkü tanımaması DOĞRU.
 APPS_BY_DEPT = {
-    "Finans": ["erp", "excel_online", "webmail", "intranet", "bank_portal"],
-    "Muhasebe": ["erp", "webmail", "intranet", "efatura", "excel_online"],
-    "IT": ["ticketing", "git", "webmail", "intranet", "cloud_console", "ssh_gw"],
-    "Satis": ["crm", "webmail", "intranet", "linkedin", "slides"],
-    "IK": ["hris", "webmail", "intranet", "job_portal"],
-    "ArGe": ["git", "jira", "webmail", "intranet", "docs_wiki", "pkg_registry"],
-    "Operasyon": ["wms", "webmail", "intranet", "ticketing"],
+    "Finans": ["erp", "excel_online", "corp_mail", "intranet", "bank_portal"],
+    "Muhasebe": ["erp", "corp_mail", "intranet", "efatura", "excel_online"],
+    "IT": ["ticketing", "git", "corp_mail", "intranet", "cloud_console", "ssh_gw"],
+    "Satis": ["crm", "corp_mail", "intranet", "linkedin", "slides"],
+    "IK": ["hris", "corp_mail", "intranet", "job_portal"],
+    "ArGe": ["git", "jira", "corp_mail", "intranet", "docs_wiki", "pkg_registry"],
+    "Operasyon": ["wms", "corp_mail", "intranet", "ticketing"],
 }
+# Seyrek ama SIFIR OLMAYAN taban davranışlar. Referans ölçümünde `cloud_app_count` 80 kullanıcının
+# 12 gününde yalnız 3 kullanıcı-günü doluydu ve üçü de S1 enjeksiyonuydu: yani `UEBA-0022`
+# "hayatında ilk kez bulut" sinyalini ölçüyordu, "kendi tabanına göre sıçrama"yı değil. Gerçek
+# kurumda insanlar ara sıra Dropbox'a da girer, kişisel e-postasına da bakar. Taban olmadan kural
+# ayırt etmeyi değil yeniliği ölçer — ve o, ölçülmesi KOLAY olan ama işe yaramayan sinyaldir.
+TABAN_KANAL_OLASILIK = {"personal_cloud": 0.030, "webmail": 0.045, "file_transfer": 0.012}
 SHARES_BY_DEPT = {
     "Finans": [r"\\FIN-SRV-01\raporlar", r"\\FIN-SRV-01\butce", r"\\FILE-01\ortak"],
     "Muhasebe": [r"\\FIN-SRV-01\raporlar", r"\\FIN-SRV-01\muhasebe", r"\\FILE-01\ortak"],
@@ -169,6 +192,9 @@ class SyntheticOrg:
                     kappa=6.0,
                     lam_logon=1.8,
                     lam_http=6.0,
+                    lam_mail_ic=float({"Satis": 7, "IK": 6, "Muhasebe": 5}.get(dept, 4.0)),
+                    # dış yazışma tabanı bölüme bağlı: Satış/İK dışarıyla sürekli, ArGe nadiren
+                    lam_mail_dis=float({"Satis": 3.5, "IK": 2.5, "Muhasebe": 2.0, "Finans": 1.5}.get(dept, 0.6)),
                     lam_file={"Finans": 5, "Muhasebe": 5, "ArGe": 4}.get(dept, 3.0),
                     lam_proc=3.0,
                     median_bytes=float(np.exp(rng.normal(np.log(120e6), 0.6))),
@@ -474,6 +500,77 @@ class SyntheticOrg:
                 )
             )
 
+        # ---- USB DIŞI sızıntı kanalları (Faz B) -------------------------------------------------
+        # Gerekçe: hedef kurulum ortamında USB YASAK, dolayısıyla r4.2'nin 34 senaryosunun 31'i o
+        # ortamda karşılığı olmayan bir kanalı ölçüyor. Değeri olan kanallar dış e-posta, kişisel
+        # webmail ve bulut yükleme; üçünün kuralı da gölge modda doğdu ve hiçbir veride
+        # doğrulanamadı (`docs/faz-b-on-kayit.md`).
+        #
+        # Üçü de AYRI aktöre veriliyor: aynı kişiye yüklenirse hangi kuralın hangi kanaldan
+        # tetiklendiği ayırt edilemez ve ölçüm anlamını yitirir.
+
+        # S11 — Dış e-postayla sızıntı: hacim kendi tabanının çok üstüne çıkar, alıcı dışarıda.
+        # `UEBA-0023` eşiği `eposta_dis_z > 3.5` (taban 50 KB). Senaryo hacmi GERÇEKÇİ bir aralıkta
+        # tutuluyor (12–40 MB/gün: büyük ek dosyalar); eşiğe göre AYARLANMIYOR. Ön kayıt: eşik
+        # değiştirilmeyecek, tetiklenmezse tetiklenmedi diye raporlanacak.
+        s11 = self._pick("Muhasebe", used)
+        used.add(s11["idx"])
+        s11["resignation_notice_idx"] = E0 + 7
+        for d in range(E0 + 8, E0 + 16):
+            k = d - (E0 + 8)
+            ov[(s11["idx"], d)].update(kanal=dict(eposta_dis_sayi=3 + k, eposta_dis_bayt=(12e6 + k * 4e6)))
+        self.ground_truth.append(
+            dict(
+                senaryo="S11_dis_eposta_sizintisi",
+                aktor="Ayrılan çalışan — e-posta kanalı",
+                sid=s11["sid"],
+                baslangic=E0 + 8,
+                olay_gunu=E0 + 15,
+                teknikler=["T1048.003", "T1114"],
+                beklenen=["UEBA-0023"],
+                veri_kaynagi=["email", "hr"],
+            )
+        )
+
+        # S12 — Kurumsal ağ geçidini atlama: kişisel webmail'e ani yönelme. Tabanı olan bir
+        # davranışta SIÇRAMA ölçülüyor (`TABAN_KANAL_OLASILIK["webmail"] = 0.045`), "ilk kez" değil.
+        s12 = self._pick("ArGe", used)
+        used.add(s12["idx"])
+        for d in range(E0 + 9, E0 + 14):
+            ov[(s12["idx"], d)].update(extra_apps=["webmail", "webmail"])
+        self.ground_truth.append(
+            dict(
+                senaryo="S12_webmail_ag_gecidi_atlama",
+                aktor="Veri sızdıran içeriden — webmail kanalı",
+                sid=s12["sid"],
+                baslangic=E0 + 9,
+                olay_gunu=E0 + 13,
+                teknikler=["T1048", "T1567"],
+                beklenen=["UEBA-0024"],
+                veri_kaynagi=["proxy"],
+            )
+        )
+
+        # S13 — Bulut yükleme sıçraması. r6.2'de kaçan S5'in (57 saniyede 4 Dropbox yüklemesi)
+        # sentetik karşılığı. Buradaki fark: artık taban VAR, yani kural yeniliği değil sıçramayı
+        # ölçmek zorunda.
+        s13 = self._pick("Satis", used)
+        used.add(s13["idx"])
+        for d in range(E0 + 11, E0 + 15):
+            ov[(s13["idx"], d)].update(extra_apps=["personal_cloud", "file_transfer"], bytes_mult=2.2)
+        self.ground_truth.append(
+            dict(
+                senaryo="S13_bulut_yukleme_sicramasi",
+                aktor="Veri sızdıran içeriden — bulut kanalı",
+                sid=s13["sid"],
+                baslangic=E0 + 11,
+                olay_gunu=E0 + 14,
+                teknikler=["T1567.002"],
+                beklenen=["UEBA-0022"],
+                veri_kaynagi=["proxy"],
+            )
+        )
+
     # ---- olay üretimi ---------------------------------------------------------
     def _add(self, rows: list, t: pd.Timestamp, cls: int, source: str, actor_raw: str, **kw) -> str:
         self._eid += 1
@@ -672,10 +769,35 @@ class SyntheticOrg:
                     ip or "10.99.0.1",
                     src_ip=ip,
                     app=app,
-                    category="cloud_storage",
+                    # S12 `webmail` enjekte ediyor; kategoriyi sabit "cloud_storage" bırakmak onu
+                    # bulut yükleme gibi gösterirdi ve `UEBA-0022` ile `UEBA-0024` birbirine karışırdı.
+                    category=("cloud_storage" if app in CLOUD_APPS else app),
                     action="http",
                     bytes_out=int(total_bytes * 0.15),
                 )
+        # Taban kanal davranışı: seyrek, ama SIFIR DEĞİL (`TABAN_KANAL_OLASILIK`). Senaryo o kanalı
+        # zaten zorluyorsa taban eklenmez — enjeksiyonun şiddeti tabanla karışmasın.
+        zorlanan = set(ov.get("extra_apps", [])) | set(ov.get("kanal", {}))
+        for kanal_app, p in TABAN_KANAL_OLASILIK.items():
+            if kanal_app in zorlanan or rng.random() >= p * season:
+                continue
+            for _ in range(int(rng.integers(1, 4))):
+                self._add(
+                    rows,
+                    self._ts(day, h0 + rng.uniform(0.2, 9.5)),
+                    OCSF_HTTP,
+                    "proxy",
+                    ip or "10.99.0.1",
+                    src_ip=ip,
+                    app=kanal_app,
+                    category=("cloud_storage" if kanal_app in CLOUD_APPS else "webmail"),
+                    action="http",
+                    # taban kullanımı KÜÇÜK hacimdir: kişisel e-postaya bakmak veri çıkarmak değildir
+                    bytes_out=int(rng.lognormal(np.log(80e3), 0.8)),
+                )
+        # E-posta ağ geçidi. Referans ölçümünde bu kaynak HİÇ YOKTU: `ext_email_bytes` her gün
+        # sıfırdı ve `UEBA-0023` hiç sınanamadı (`docs/faz-b-on-kayit.md`).
+        self._gen_email(rows, u, day, h0, device, ov, season)
         # Dosya sunucu
         n_file = int(rng.poisson(u["lam_file"] * season * ov.get("files_mult", 1.0)))
         for _ in range(n_file):
@@ -757,6 +879,56 @@ class SyntheticOrg:
                 action="usb_copy",
                 category="removable_media",
                 bytes_out=int(rng.lognormal(np.log(50e6), 1)),
+            )
+
+    def _gen_email(self, rows: list, u: dict, day: pd.Timestamp, h0: float, device: str, ov: dict, season: float) -> None:
+        """E-posta ağ geçidi: iç yazışma tabanı + dış alıcıya gönderim.
+
+        `features.py` dış e-postayı `app == "email_external"` ile ayırır ve hacmini `bytes_out`'tan
+        toplar. İkisi de burada üretilir, yoksa `UEBA-0023` yapısal olarak ölü kalır.
+
+        **`ext_email_attachments` burada ÜRETİLMEZ** ve bu bilinçli bir sınırdır: ek sayısı
+        `attachments` kolonundan gelir, o kolon `EVENT_COLUMNS`'ta yok ve `schema.py` DONMUŞ.
+        Ön kayıt "Faz B donmuş dosyaya dokunmaz" diyordu, dolayısıyla alan eklenmedi. Maliyeti
+        ölçüldü: hiçbir yayındaki kural `eposta_ek_sayisi` okumuyor, yani kayıp sıfır. CERT o alanı
+        sağlıyor; sentetik veride ek sayısı sinyali sınanamaz kalıyor.
+
+        Dış e-posta **tabanı sıfır olamaz**: her kurumda müşteriye, tedarikçiye, muhasebeciye posta
+        gidiyor. Taban olmazsa kural "ilk kez dış e-posta" sinyalini ölçer ki o anlamsızdır.
+        """
+        rng = self.rng
+        kanal = ov.get("kanal", {})
+        n_ic = int(rng.poisson(u["lam_mail_ic"] * season))
+        for _ in range(n_ic):
+            self._add(
+                rows,
+                self._ts(day, h0 + rng.uniform(0.1, 9.0)),
+                OCSF_EMAIL,
+                "email",
+                u["upn"],
+                device=device,
+                app="email_internal",
+                category="email_internal",
+                action="send",
+                bytes_out=int(rng.lognormal(np.log(40e3), 1.0)),
+            )
+        # dış alıcı: bölüme göre taban (Satış/İK dışarıyla çok yazışır, ArGe az)
+        n_dis = int(rng.poisson(u["lam_mail_dis"] * season)) + int(kanal.get("eposta_dis_sayi", 0))
+        ek_hacim = float(kanal.get("eposta_dis_bayt", 0.0))
+        for k in range(n_dis):
+            # senaryo hacmi varsa gönderimlere PAYLAŞTIRILIR; yoksa normal dağılım
+            bayt = (ek_hacim / max(n_dis, 1)) if ek_hacim else float(rng.lognormal(np.log(120e3), 1.1))
+            self._add(
+                rows,
+                self._ts(day, h0 + rng.uniform(0.1, 9.0)),
+                OCSF_EMAIL,
+                "email",
+                u["upn"],
+                device=device,
+                app="email_external",
+                category="email_external",
+                action="send",
+                bytes_out=int(bayt),
             )
 
     def _gen_service(self, rows: list, u: dict, day: pd.Timestamp, d: int, leases: pd.DataFrame, lease_cache: dict) -> None:

@@ -128,3 +128,61 @@ tam o iki bölümde sistematik yanlış pozitif üretirdi. Kayda geçiyor, ayrı
 olduğunu göstermek**, gerçek kurumu temsil etmek değil — `scripts/esik_ulasilabilirlik.py`'nin
 notunda yazdığı gibi bu denetim bir **alt sınırdır**. Kanal kurallarının gerçek değeri ancak
 hedef ortamın kendi telemetrisinde ölçülebilir.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (5 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/faz-b-sonuclar.md`.
+
+## Sapma 1 — ÖLÇÜT 2'nin başarısızlık sebebi tahmin edilenden farklı çıktı
+
+Ön kayıt "en olası başarısızlık: `UEBA-0023`'ün eşiği sentetik hacim dağılımına uymaz" demişti.
+İlk ölçümde kural gerçekten 0 kez tetiklendi ama sebep eşik DEĞİLDİ: varsayılan
+`available_sources` `email` içermiyor, dolayısıyla kural "kaynak yok" diye **devre dışıydı** ve
+hiç değerlendirilmiyordu. Sinyal ise tarihsel maksimumun 5–10 katına çıkmıştı.
+
+Ölçüm aracı düzeltildi: kaynak listesi artık **veriden türetiliyor**, `kor_kosu_r52.py`'nin zaten
+yaptığı gibi. Bu bir eşik ya da kural değişikliği değil, yapılandırma hatasının giderilmesi.
+Sonra `UEBA-0023` 108 kez tetikledi.
+
+**Eşik değiştirilmedi** — ön kayıt yasaklıyordu ve ölçüm eşiğin çok GEVŞEK olduğunu gösteriyor,
+yani v8'deki 5 MB → 50 KB değişikliği tetiklenemeyen bir kural için yapılmış ve hiç doğrulanmamış.
+Yeniden türetilmesi ayrı bir ön kayıtla yapılacak.
+
+## Sapma 2 — `metrics.py` değişti (ön kayıttaki dosya listesinde yoktu)
+
+Ön kayıt beş değişiklik listelemişti, hepsi `data/synthetic.py` ve ölçüm betiğinde. Altıncı bir
+değişiklik yapıldı: `metrics.py`'ye `GÖLGEDE` kapsama durumu eklendi.
+
+**Gerekçe:** gölge modda bir kural tasarımı gereği kuyruğa giremez (13.6), dolayısıyla beklenen
+tespitlerinin hepsi gölge modda olan senaryo kuyruk ölçümüyle "yakalanamaz". İlk ölçümde S11/S12/S13
+"KALDI / REVİZYON GEREKLİ" göründü ve **mevcut 7/8 kapsama 7/11 gibi raporlandı** — yani ölçüt 1
+dürüstçe değerlendirilemiyordu. Senaryolar değil ÖLÇÜM yanlıştı.
+
+Bu, Faz A-2'nin ilkesinin ("bakamadığı bir şeyi kaçırmış sayılmaz") bir seviye yukarıdaki
+karşılığıdır. `metrics.py` donmuş kümede değil, dolayısıyla dondurma sürümü değişmedi.
+Yine de kapsam genişlemesi; kayda geçiyor.
+
+## Sapma 3 — `ext_email_attachments` üretilmedi
+
+Ön kayıt "hiçbir donmuş dosyaya dokunulmayacak" diyordu. `attachments` kolonu `EVENT_COLUMNS`'ta
+yok ve `schema.py` donmuş, dolayısıyla alan **eklenmedi** ve e-posta olaylarında ek sayısı
+üretilmiyor. Ön kayıt bu durumda "durup yeniden düşünülecek" demişti; düşünüldü ve maliyeti
+ölçüldü: hiçbir yayındaki kural `eposta_ek_sayisi` okumuyor, yani ölçülebilir kayıp **sıfır**.
+CERT o alanı sağlamaya devam ediyor.
+
+## Sapma 4 — ÖLÇÜT 6 KALDI ve eşik düzeltilmedi
+
+`UEBA-0023` negatif kontrolde bir kez tetikledi. Bu, kuralın 80 kullanıcının 51'inde tetiklediği
+gerçeğinin doğal sonucu — negatif kontrol kullanıcısının özel bir durumu yok. Yani ölçüt 6'nın
+kalması bağımsız bir bulgu değil, aynı bulgunun başka yüzü.
+
+Düzeltme bu fazda **yapılmadı**: eşik ön kayıt gereği sabit. Kural gölge modda, yani bu yanlış
+pozitifler hiçbir analiste gitmiyor.
+
+## Sapma 5 — karamsar beklenti 2 gerçekleşmedi (iyi yönde)
+
+Ön kayıt "bulut tabanı eklemek mevcut kapsamayı DÜŞÜREBİLİR, çünkü S1 `personal_cloud`'un
+'hayatında ilk kez' olmasına dayanıyor" demişti. Düşmedi: S1 hâlâ GEÇTİ. S1'in sinyali tek kanala
+bağlı değilmiş — hacim, mesai dışı dosya ve ayrılık bildirimi birlikte çalışıyor.

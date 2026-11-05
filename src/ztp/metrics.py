@@ -71,6 +71,8 @@ class MetricsCollector:
         self.cfg, self.gt, self.catalog = cfg, ground_truth, catalog
         # Faz A-2: bayrak kapalıysa harita okunmaz — kapalı hâl birebir eski rapor.
         self.mevcudiyet = mevcudiyet if getattr(cfg, "sema_farkindaligi", False) else None
+        # Faz B: hangi kural gölge modda — gölge kural kuyruğa giremez, "kaçırıldı" sayılmaz.
+        self._golge = {r["id"]: r.get("durum") == "golge-modda" for r in catalog}
         self.daily: List[dict] = []
         self.first_alert: Dict[str, Tuple[pd.Timestamp, List[str]]] = {}
         self.alerts_by_sid: Dict[str, List[Tuple[pd.Timestamp, Set[str]]]] = defaultdict(list)
@@ -308,7 +310,15 @@ class MetricsCollector:
             olu = sorted(b for b in expected if self.mevcudiyet and not self.mevcudiyet.degerlendirilebilir(b))
             if olculebilirlik == "kismi":
                 partial += f" [şemadan ölü beklenen tespit: {', '.join(olu)}]"
-            if olculebilirlik == "olculemez" and not hit_exp:
+            # Faz B: GÖLGE MODDAKİ kural kuyruğa GİREMEZ (13.6) — tasarımı bu. Dolayısıyla beklenen
+            # tespitlerinin hepsi gölge modda olan bir senaryo kuyruk ölçümüyle "yakalanamaz" ve
+            # "kaçırıldı" saymak raporu yanıltır: A-2'deki "bakamadığı şeyi kaçırmış sayılmaz"
+            # ilkesinin aynısı, bir seviye yukarıda. Böyle bir senaryo gölge günlüğünde ölçülür
+            # (`scripts/kanal_senaryo_olcumu.py`), kuyrukta değil.
+            golge_beklenen = sorted(b for b in expected if self._golge.get(b))
+            if expected and len(golge_beklenen) == len(expected) and not hit_exp:
+                sonuc = f"GÖLGEDE (beklenen tespitler gölge modda, kuyruğa giremez: {', '.join(golge_beklenen)})"
+            elif olculebilirlik == "olculemez" and not hit_exp:
                 sonuc = f"ÖLÇÜLEMEDİ (beklenen tespitlerin hepsi şemadan ölü: {', '.join(olu)})"
             elif expected & all_fired and not hit_exp:
                 sonuc = "BÜTÇE DIŞI (beklenen tespit tetiklendi, kuyruğa girmedi)"
@@ -459,7 +469,7 @@ class MetricsCollector:
         positives = [c for c in cov if "negatif" not in c["senaryo"].lower()]
         # Faz A-2: ölçülemeyen senaryo paydadan düşer. "22/34" ile "22/31 (+3 ölçülemedi)" aynı
         # sayıyı farklı iki gerçeklikle anlatır; ikincisi doğru olanıdır.
-        olculemez = [c for c in positives if c["sonuc"].startswith("ÖLÇÜLEMEDİ")]
+        olculemez = [c for c in positives if c["sonuc"].startswith(("ÖLÇÜLEMEDİ", "GÖLGEDE"))]
         olculebilir = [c for c in positives if c not in olculemez]
         detected = sum(1 for c in positives if c["sonuc"].startswith("GEÇTİ"))
         stale = [

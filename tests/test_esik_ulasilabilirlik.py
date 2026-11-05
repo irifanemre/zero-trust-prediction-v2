@@ -35,9 +35,13 @@ BILINEN = {
     # 7 S2 senaryosunun muhtemel sebebidir (`docs/v7-ayar-taramasi.md` ve literatür haritası).
     ("UEBA-0017", "usb_poisson_p"),
     ("UEBA-0017", "usb_7g_poisson_p"),
-    # Sentetik üreteç dış e-posta ÜRETMİYOR: `eposta_dis_z` hep 0. Kuralın hatası değil, üretecin
-    # eksiği (`docs/sprint-v8-kanal-kurallari-on-kayit.md`). E-posta senaryoları eklenince kalkar.
-    ("UEBA-0023", "eposta_dis_z"),
+    # ÇÖZÜLDÜ, Faz B (5 Kasım 2026) — bu satır bilerek burada DEĞİL. Eskiden şöyleydi:
+    #     ("UEBA-0023", "eposta_dis_z"),   # "sentetik üreteç dış e-posta ÜRETMİYOR"
+    # Gerekçe doğruydu ama EKSİKTİ: üreteç e-posta üretmeye başladıktan sonra bile kural
+    # tetiklenmedi, çünkü ikinci ve bağımsız bir sebep vardı — varsayılan `available_sources`
+    # `email` içermiyor, yani kural "kaynak yok" diye DEVRE DIŞI kalıyordu. İki sebep üst üste
+    # binince "eşik yüksek" diye teşhis edildi ve v8'de taban 5 MB'tan 50 KB'a çekildi; o değişiklik
+    # hiç doğrulanmadı çünkü kural hâlâ tetiklenemiyordu. Ayrıntı: `docs/faz-b-sonuclar.md`.
     # REL-0016'nın "ortak kaynağa erişen riskli kullanıcı kümesi" deseni sentetik veride oluşmuyor.
     ("REL-0016", "ortak_kaynak_riskli_kume"),
 }
