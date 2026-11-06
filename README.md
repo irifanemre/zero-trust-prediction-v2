@@ -233,6 +233,38 @@ olmadığından PRED-0011/13/14 gerçek veride sınanamadı. Yol haritası için
 - **Akış ve graf motoru altyapısı yok.** Kafka/Flink akış işleme ve Memgraph/Neo4j graf motoru geçişi
   tasarlanmış ama uygulanmamıştır; mevcut uygulama parça parça toplu işleme ve NetworkX üzerinedir.
 
+**Kasım 2026 ölçümlerinde bulunan yapısal sınırlar:**
+
+- **İki kural her CERT koşusunda yapısal olarak ÖLÜ** (`UEBA-0006` başarısız giriş, `UEBA-0008`
+  keşif; toplam ağırlık 11). CERT `logon.csv` başarısız giriş tutmuyor, süreç telemetrisi yok ve
+  dosya adı saklanmıyor. İkisi de 11 ablasyon varyantının hepsinde *"bu veride desen görülmedi"*
+  diye raporlanmıştı — yani 25 kuralın 25'i sınanıyor sanılıyordu, 23'ü sınanıyordu.
+  (`docs/faz-a2-sonuclar.md`)
+- **Web yükleme hacmi CERT'te hiç ölçülmüyor.** `cert.py` `http.csv`'den `content` okumaz — sayfa
+  metni hacim vekili sayılmaz (4.2 etik sınır / 20.1). Yani `bytes_out` **her sürümde** web
+  kanalında sıfırdır, r4.2 dahil; `UEBA-0003` yalnız e-posta ve dosya baytlarıyla tetikleniyor.
+  Saf web sızıntısı (ör. r6.2'nin S5'i: 57 saniyede 4 Dropbox yüklemesi) CERT'te hiçbir kuralla
+  yakalanamaz. (`docs/faz-a3-sonuclar.md`)
+- **7 günlük skor kalibre bir olasılık DEĞİL.** Sıralama gücü yüksek (AUC 0,85–0,94, AUPRC taban
+  oranının 13 katı, precision@1 0,958) ama Brier beceri skoru dört ufukta da negatif — izotonik
+  kalibrasyondan sonra bile. Kalibrasyon yanlılığı giderir (ECE 5 kat düzeldi), çözünürlüğü
+  gideremez. Rapor dili buna göre düzeltildi: skor "öncelik" olarak sunuluyor, "%X ihtimal" olarak
+  değil. (`docs/faz-c2-sonuclar.md`)
+- **`UEBA-0023`'ün eşiği hiç doğrulanmadı** ve sentetik veride kullanıcıların %64'ünde tetikliyor
+  (günde ~6 uyarı, bütçe 6). Kural **gölge modda** olduğu için hiçbiri analiste gitmiyor — risk
+  kontrol altında, sorun çözülmemiş. Doğru eşik operasyonel bir karar ve hedef ortamın e-posta
+  hacim dağılımını gerektiriyor (`scripts/kurulum_hazirlik.py` onu çıkarır).
+  (`docs/v10-sonuclar.md`)
+- **Sentetik test aracı senaryoları pencerenin başına sıkıştırıyor** (olay günleri `E0+2 … E0+22`,
+  pencere uzunluğundan bağımsız). 60 günlük pencerede senaryolar ilk %38'de kalıyor ve ikinci
+  yarıda hiç pozitif olmuyor; zamansal bölme gerektiren ölçümler orada yanıltıcı. Düzeltilmedi,
+  **uyarılıyor** (`senaryo_kapsamasi()`). CERT ölçümleri etkilenmiyor. (`docs/faz-c2-sonuclar.md`)
+- **18 isteğe bağlı bileşenin 18'i varsayılanda KAPALI.** Graf, ADWIN, denetimsiz anomali kanalı,
+  geri bildirim döngüsü, saldırı yolu tahmini, öğrenen graf, şema farkındalığı, bütçe devretmesi —
+  hiçbiri *iki farklı veride* değer üretemedi. Bu bir eksiklik değil ölçümün sonucu: graf çarpanı
+  r4.2'de +5 insider verip r6.2'de +0 verdikten sonra kural böyle kondu.
+  (`docs/r62-graf-tek-basina.md`)
+
 ## Ölçüm sonuçları
 
 | Veri | Rolü | Kullanıcı | İnsider | Yakalama | precision@1 | Yanlış alarm |
