@@ -77,3 +77,54 @@ değişmeyecek.
 - Sonuç iyi çıksa bile **varsayılan açılmayacak** (kör veri yok).
 - `butce_devir_tavani` ayarlanmayacak. Sonucu gördükten sonra tavan oynatmak, eşiği sonuca göre
   ayarlamaktır — bu projede iki kez yapıldı ve ikisi de sapma olarak kayda geçti.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (6 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/v11-r42-sonuclar.md`.
+
+## Sapma 1 — ÖLÇÜT 4 KALDI, karamsar beklenti 1 doğru çıktı
+
+`BÜTÇE DIŞI` 5 → 5, durumu değişen senaryo 0. Devretme 126 ek vaka açtı ve hiçbiri insider
+değildi. Ön kayıt "kazanç 0–2 senaryo, muhtemelen 0" demişti; 0 geldi.
+
+## Sapma 2 — ön kayıtın DAYANDIĞI TEŞHİS ÇÜRÜDÜ
+
+Ön kayıt şu cümleyle başlıyordu: *"r4.2'de kaçan 12 insider'ın 5'i tespit edilmişti ve bütçe
+yarışında kaybedildi. Devretme tam bu başarısızlık biçimini hedefliyor."*
+
+**Bu teşhis yanlıştı ve kaynağı bir etiketin ADIYDI, veri değil.** Bütçe eğrisi gösteriyor ki
+bütçe 30'dan 100'e çıkarıldığında:
+
+| bütçe | vaka | yakalanan insider |
+|---|---|---|
+| 30 | 1.896 | 23 |
+| 100 | 1.939 | **23** |
+
+Eğri düz. Üç katı bütçe o 5 insider'ı getirmiyor, yani **bütçe o kapı değil**.
+
+`metrics.py`'deki etiket `"BÜTÇE DIŞI (beklenen tespit tetiklendi, kuyruğa girmedi)"`. Parantez
+içi doğru, etiketin **adı** yanıltıcı: kuyruğa girişi üç kapı sınırlıyor (7 günlük tekrar sunma
+kısıtı, kanıt çeşitliliği doğrulaması, bütçe) ve ölçüm üçüncüsünü eliyor.
+
+Yani bu faz **doğru mekanizmayı yanlış kapıya uyguladı**. Ön kaydı yazarken teşhisi veriden
+doğrulamadım; etiketin adını okudum. Kayda geçiyor.
+
+## Sapma 3 — ön kayıtın açıklaması da tam isabet değildi
+
+Karamsar beklenti 1 "r4.2'de kuyruk muhtemelen SÜREKLİ DOLU, kullanılmayan kapasite yoktur"
+diyordu. Yarısı doğru: sonuç (+0) doğru tahmin edildi ama **sebep** farklı. Kuyruk dolu değil —
+bütçe 30'da 1.896 vaka, sınırsızda 1.939. Boş kapasite **var** ve devretme onu kullandı (+126
+vaka). Sıradaki adaylar insider değildi.
+
+Küçük sentetik kurulumda sıradaki aday insider olabiliyordu (S5 böyle kazanılmıştı); 2.801
+kullanıcılık r4.2'de olmuyor.
+
+## Yapılmayanlar (ön kayıtta söz verildiği gibi)
+
+- **Varsayılan açılmadı** — zaten açılmayacaktı, şimdi gerekçesi iki veriden.
+- **`butce_devir_tavani` ayarlanmadı.** Ön kayıt yasaklıyordu: "sonucu gördükten sonra tavan
+  oynatmak, eşiği sonuca göre ayarlamaktır."
+- **Kanıt çeşitliliği / tekrar sunma kapıları ölçülmedi.** Bu ölçümün ortaya çıkardığı yeni soru;
+  kendi ön kaydıyla yapılacak.
