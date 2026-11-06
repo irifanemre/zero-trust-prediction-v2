@@ -220,6 +220,15 @@ VARIANTS: Dict[str, dict] = {
     # kapasitenin %18'i boşa gidiyordu (kuyruk medyanı 5, bütçe 6). r4.2'de 2.801 kullanıcı var ve
     # kuyruk muhtemelen sürekli dolu — o hâlde devretmenin taşıyacağı boş kapasite YOKTUR ve hiçbir
     # şey yapmaz. Ölçümün amacı tam bunu sınamak (`docs/v11-r42-on-kayit.md`).
+    # Kapı teşhisi: v11 ölçümü bütçenin bağlayıcı OLMADIĞINI gösterdi (bütçe 30→100 arası eğri düz,
+    # 1.939 vaka / 23 insider sabit). Geriye `select_queue`'nun iki kapısı kalıyor; bu varyant
+    # kanıt doğrulama kapısını kapatıp kaçan 5 senaryonun kaçının ondan olduğunu ölçer.
+    # Hipotez (`docs/kapi-tanisi-on-kayit.md`): S2 insider'ları tek kuralı (UEBA-0017) tek günde
+    # tetikliyor, bu da `corroborated()`'ın "≥2 kural" ve "≥3 gün" koşullarını birden düşürüyor.
+    "v12_dogrulama_kapali": dict(
+        aciklama="kanıt doğrulama kapısı kapalı — kaçan senaryoların kaçı bu kapıdan?",
+        cfg=dict(kuyruk_dogrulama=False),
+    ),
     "v11_butce_devretme": dict(
         aciklama="v11: kullanılmayan günlük bütçe ertesi güne devreder (tavan = günlük bütçe)",
         cfg=dict(butce_devretme=True),
