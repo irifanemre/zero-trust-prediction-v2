@@ -225,6 +225,15 @@ VARIANTS: Dict[str, dict] = {
     # kanıt doğrulama kapısını kapatıp kaçan 5 senaryonun kaçının ondan olduğunu ölçer.
     # Hipotez (`docs/kapi-tanisi-on-kayit.md`): S2 insider'ları tek kuralı (UEBA-0017) tek günde
     # tetikliyor, bu da `corroborated()`'ın "≥2 kural" ve "≥3 gün" koşullarını birden düşürüyor.
+    # "Etki toplanıyor mu" testi: graf çarpanı ve kanıt kapısı r4.2'de neredeyse birebir aynı sonucu
+    # veriyor (27/34 · 2.069 vs 27/34 · 2.068). `corroborated()` içinde `any(v > 1 for v in
+    # r.multipliers.values())` koşulu var, yani graf çarpanı kapıyı tek başına açıyor olabilir.
+    # İkisi birlikte açılınca kapsama 27'de kalırsa aynı 5 insider'ı kurtarıyorlar demektir
+    # (`docs/graf-kapi-on-kayit.md`).
+    "v12_graf_arti_kapi": dict(
+        aciklama="graf çarpanı + kanıt kapısı birlikte — etki toplanıyor mu?",
+        cfg=dict(graf_enabled=True, graf_agirligi=0.5, kuyruk_dogrulama=False),
+    ),
     "v12_dogrulama_kapali": dict(
         aciklama="kanıt doğrulama kapısı kapalı — kaçan senaryoların kaçı bu kapıdan?",
         cfg=dict(kuyruk_dogrulama=False),
