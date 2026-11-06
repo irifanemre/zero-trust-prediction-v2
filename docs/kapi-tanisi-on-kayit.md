@@ -80,3 +80,52 @@ Kapı 2 açıklamazsa kapı 1 ayrı bir ön kayıtla ele alınacak.
   gördükten sonra bu sabitleri oynatmak, eşiği sonuca göre ayarlamaktır — bu projede iki kez
   yapıldı, ikisi de sapma olarak kayda geçti.
 - **Varsayılan değiştirilmeyecek.**
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (6 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/kapi-tanisi-sonuclar.md`.
+
+## Sapma yok — ölçüt 1, 2 ve 4 yazıldığı gibi sınandı ve hipotez doğrulandı
+
+`BÜTÇE DIŞI` 5 → **0**, kapsama 22/34 → **27/34**. Beş senaryonun beşi de geri geldi.
+
+## Karamsar beklentilerin İKİSİ de yanlış çıktı
+
+| Beklenti | Gerçek |
+|---|---|
+| 1. "Vaka sayısı çok artacak, belki iki katı" | **×1,07** (1.939 → 2.068) |
+| 2. "Kazanç 5'in tamamı olmayacak; dördü kısmi pencereli" | **5/5 geldi** |
+
+Beklenti 3 ("en olası sonuç kısmi doğrulama") da yanlış: doğrulama tam çıktı.
+Beklenti 4 ("bu koşu çözüm üretmeyecek, teşhis koşusudur") **doğru** ve uyuldu — varsayılan
+değişmedi, hiçbir sabit ayarlanmadı.
+
+Ayrıca ön kayıtta öngörülmeyen bir ölçüm çıktı ve en önemlisi o: **precision@N hiç değişmedi**
+(0,045 → 0,045). Yani kapı yanlış alarmı oransal olarak azaltmıyormuş; insider'ı da gürültüyü de
+aynı oranda kesiyormuş.
+
+## Ön kayıtta öngörülmeyen asıl bulgu: grafın açıklaması değişiyor
+
+| Varyant | Kapsama | Vaka |
+|---|---|---|
+| `v4_graf_carpan` (30 Ekim) | 27/34 | **2.069** |
+| `v12_dogrulama_kapali` (6 Kasım) | 27/34 | **2.068** |
+
+Bir vaka fark. `corroborated()` içinde `any(v > 1 for v in r.multipliers.values())` koşulu var,
+yani graf çarpanı açıldığında kanıt doğrulama kapısını **tek başına açıyor**.
+
+**Hipotez: grafın r4.2'deki +5'i sıralamayı germesinden değil, kapıyı açmasından geliyor.**
+Bu, projenin iki yerleşik açıklamasını da sorguluyor (çarpan-vs-toplamsal farkı; grafın r6.2'ye
+taşınmaması). Hipotez bu koşuda **sınanmadı**; doğrudan testi graf ve kapıyı birlikte açmaktır
+(etki toplanmazsa aynı 5 insider, toplanırsa farklı). Kendi ön kaydıyla.
+
+## Yapılmayanlar (ön kayıtta söz verildiği gibi)
+
+- **Varsayılan değişmedi.** +5 insider / +%7 vaka / sabit precision, bu arkın en iyi takası — ama
+  graf çarpanı r4.2'de **tam bu rakamları** verip r6.2'de +0 insider / +757 yanlış pozitif
+  vermişti. Aynı profile bu kez farklı davranmak için sebep yok.
+- **`kuyruk_tekrar_gun` ve `kuyruk_kacis_yuzdelik` ayarlanmadı.**
+- **Kapı 1 (7 günlük tekrar sunma) sınanmadı** — bayrağı yok, `scoring.py` donmuş, ve kapı 2 beş
+  senaryonun beşini de açıkladığı için gerek kalmadı.
