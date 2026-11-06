@@ -216,6 +216,14 @@ VARIANTS: Dict[str, dict] = {
         ),
     ),
     # ---- v8 kanal kuralları: ölçüm için yayına alınır (YAML gölgede kalır)
+    # v11: kullanılmayan bütçe devreder. Sentetik veride kapsamayı 7/8 → 8/8 yaptı çünkü orada
+    # kapasitenin %18'i boşa gidiyordu (kuyruk medyanı 5, bütçe 6). r4.2'de 2.801 kullanıcı var ve
+    # kuyruk muhtemelen sürekli dolu — o hâlde devretmenin taşıyacağı boş kapasite YOKTUR ve hiçbir
+    # şey yapmaz. Ölçümün amacı tam bunu sınamak (`docs/v11-r42-on-kayit.md`).
+    "v11_butce_devretme": dict(
+        aciklama="v11: kullanılmayan günlük bütçe ertesi güne devreder (tavan = günlük bütçe)",
+        cfg=dict(butce_devretme=True),
+    ),
     "v8_kanal_kurallari": dict(
         aciklama="v8: UEBA-0023 (dış e-posta) + UEBA-0024 (webmail) ÖLÇÜM için yayında",
         catalog=_yayina(("UEBA-0023", "UEBA-0024")),

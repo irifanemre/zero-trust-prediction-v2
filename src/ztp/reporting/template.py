@@ -28,7 +28,7 @@ class TemplateReporter:
             + "│"
         )
         L.append(
-            f"│ Yüzdelik: %{case['yuzdelik'] * 100:.1f}  |  Ham: {case['ham_skor']:.1f}  |  Yapısal: {case['yapisal_skor']:.2f}  |  7g tahmin: %{case['tahmin_7g']['olasilik'] * 100:.0f}  |  Kritik: {'EVET' if case['kritik'] else 'hayır'}  |  Güven: {(case.get('guven') or {}).get('seviye', '—')}".ljust(
+            f"│ Yüzdelik: %{case['yuzdelik'] * 100:.1f}  |  Ham: {case['ham_skor']:.1f}  |  Yapısal: {case['yapisal_skor']:.2f}  |  7g öncelik skoru: {case['tahmin_7g']['olasilik']:.2f}  |  Kritik: {'EVET' if case['kritik'] else 'hayır'}  |  Güven: {(case.get('guven') or {}).get('seviye', '—')}".ljust(
                 w + 1
             )
             + "│"
@@ -124,6 +124,18 @@ class TemplateReporter:
         )
         L.append(
             "│ Otomatik engelleme YOK — erişim kısıtlama yalnızca doğrulanmış olay + insan kararıyla (7.3).".ljust(w + 1) + "│"
+        )
+        L.append("├" + "─" * w + "┤")
+        # 7g öncelik skoru OLASILIK DEĞİLDİR ve öyle sunulmaz. Ölçüm (`docs/faz-c2-sonuclar.md`):
+        # sıralama gücü yüksek (AUC 0,85–0,94; AUPRC taban oranının 13 katı; precision@1 0,958) ama
+        # Brier beceri skoru dört ufukta da NEGATİF — izotonik kalibrasyondan SONRA bile. Yani skor
+        # kimin önce bakılacağını iyi söylüyor, "%73 ihtimalle olacak" demeye yetmiyor. Eskiden bu
+        # satırda "7g tahmin: %73" yazıyordu ve o cümlenin dayanağı yoktu.
+        L.append(
+            "│ 7g öncelik skoru bir SIRALAMA ölçüsüdür, olasılık değildir: kimin önce inceleneceğini".ljust(w + 1) + "│"
+        )
+        L.append(
+            "│ söyler, olayın gerçekleşme yüzdesini söylemez (ölçüm: docs/faz-c2-sonuclar.md).".ljust(w + 1) + "│"
         )
         L.append(
             "│ [ ✓ GERÇEK TEHDİT ]  [ ✗ YANLIŞ ALARM (sebep zorunlu) ]  [ ¿ BELİRSİZ ]   → etiket deposuna yazılır".ljust(w + 1)

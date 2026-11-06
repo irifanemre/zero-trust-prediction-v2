@@ -216,3 +216,38 @@ def test_template_report_strips_terminal_escapes():
     case["tespitler"][0].update(katki=1.0)
     out = TemplateReporter.render(case)
     assert "\x1b" not in out and "KIRMIZI" in out
+
+
+def test_rapor_7g_skoru_OLASILIK_olarak_sunmaz():
+    """Sözleşme: 7 günlük skor rapora **olasılık** olarak yazılmaz.
+
+    Ölçüm (`docs/faz-c2-sonuclar.md`, 120 kullanıcı, 4 tohum, zamansal bölme): skorun SIRALAMA
+    gücü yüksek — AUC 0,85–0,94, AUPRC taban oranının 13 katı, precision@1 0,958. Ama Brier
+    **beceri skoru dört ufukta da NEGATİF** (−0,07 … −0,37), izotonik kalibrasyondan SONRA bile;
+    yani sabit taban oranını tahmin etmek bu sayıdan daha iyi Brier veriyor.
+
+    Sebep: kalibrasyon yanlılığı giderir (ECE 5 kat düzeldi) ama ÇÖZÜNÜRLÜĞÜ gideremez — monoton
+    bir eşleme olasılıkların ayrışmasını artırmaz.
+
+    Rapor eskiden "7g tahmin: %92" yazıyordu. Bu test o ifadenin geri gelmesini engeller: sayı
+    gösterilebilir, "yüzde ihtimal" diye sunulamaz.
+    """
+    case = _case()
+    case.update(
+        musteri="t",
+        delta_7g=0,
+        ham_skor=1.0,
+        yapisal_skor=0.1,
+        tahmin_7g=dict(olasilik=0.92),
+        ozet="özet [E-0000001]",
+        ozet_kaynagi="sablon",
+        mudahale=dict(seviye="Düşük", aksiyon="izle", kullanici_etkisi="Yok"),
+    )
+    case["tespitler"][0].update(katki=1.0)
+    out = TemplateReporter.render(case)
+
+    assert "7g tahmin: %" not in out, "olasılık iddiası geri gelmiş"
+    assert "7g öncelik skoru" in out and "0.92" in out
+    # analist neyin doğrulandığını okuyabilmeli
+    assert "SIRALAMA ölçüsüdür, olasılık değildir" in out
+    assert "faz-c2-sonuclar" in out

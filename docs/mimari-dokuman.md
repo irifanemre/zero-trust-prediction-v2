@@ -1441,7 +1441,7 @@ Tasarım notu: Alt kısımdaki karar butonları yalnızca arayüz unsuru değil,
 ┌───────────────────────────────────────────────────────────────────────────────────────────────┐
 │ VAKA C-20260828-5439              Risk:  75/100  ▲ (7 gün: +95)                               │
 │ Kullanıcı: U-5439  |  Departman: Operasyon  |  Müşteri: musteri-A  |  Gün: 2026-08-28         │
-│ Yüzdelik: %99.9  |  Ham: 98.2  |  Yapısal: 0.17  |  7g tahmin: %92  |  Kritik: EVET           │
+│ Yüzdelik: %99.9  |  Ham: 98.2  |  Yapısal: 0.17  |  7g öncelik skoru: 0.92  |  Kritik: EVET   │
 ├───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ SKOR GEREKÇESİ                                                                                │
 │  • [HONEY-0018] Tuzak hesap kullanımı (honeytoken): tuzak hesap etkileşimi (meşru kullanımı   │
@@ -1471,7 +1471,17 @@ Tasarım notu: Alt kısımdaki karar butonları yalnızca arayüz unsuru değil,
 └───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-(Sentetik `--honeytokens` koşusundan, S10 senaryosu; 7g tahmin %92 sezgisel modelindir — kalibrasyon için 4 ve 14.6.)
+(Sentetik `--honeytokens` koşusundan, S10 senaryosu; 0,92 sezgisel modelin **öncelik skorudur**.)
+
+> **Düzeltme (6 Kasım 2026).** Bu satırda eskiden "7g tahmin: %92" yazıyordu ve o cümlenin
+> dayanağı **yoktu**. Ölçüm (`docs/faz-c2-sonuclar.md`, 4 tohum): skorun sıralama gücü yüksek —
+> AUC 0,85–0,94, AUPRC taban oranının 13 katı, precision@1 0,958 — ama Brier beceri skoru dört
+> ufukta da **negatif**, izotonik kalibrasyondan sonra bile. Yani sabit taban oranını tahmin etmek
+> bu "olasılıktan" daha iyi Brier veriyor.
+>
+> Sebep ölçüldü: kalibrasyon **yanlılığı** giderir (ECE 5 kat düzeldi), **çözünürlüğü** gideremez —
+> monoton bir eşleme olasılıkların ayrışmasını artırmaz. Skor kimin önce inceleneceğini iyi söyler,
+> olayın gerçekleşme yüzdesini söylemez. Rapor dili buna göre düzeltildi.
 
 ---
 
