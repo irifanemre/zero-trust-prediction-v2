@@ -66,3 +66,44 @@ Bu, "etki toplanıyor mu" testidir ve cevabı ikiye ayırır. Ara yorum yok.
    gevşeterek de elde ediliyor ve bu daha ucuz, daha anlaşılır.
 4. **Varsayılan yine değişmeyecek.** Bu bir teşhis koşusu; ikisi de r4.2'de (ayar verisi) ölçülüyor
    ve graf r6.2'de zaten çökmüştü.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (6 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**. Sonuçlar: `docs/graf-kapi-sonuclar.md`.
+
+## Sapma yok — hipotez karar kuralına göre DOĞRULANDI
+
+Ölçüt 3 iki şart istiyordu: kapsama 27/34 **ve** kurtarılan küme `v12_dogrulama_kapali` ile aynı.
+İkisi de sağlandı. Üç varyant da birebir aynı beş senaryoyu kurtardı, hiçbirinde kayıp yok,
+birleşim = kesişim = 5.
+
+## Karamsar beklenti 2 yanlış çıktı
+
+"Graf+kapı vaka sayısı ikisinden de yüksek çıkacak, çünkü graf skoru da değiştiriyor" yazmıştım.
+Çıkmadı: 2.069 — grafın tek başına verdiğiyle **aynı**. Kapı zaten açıkken grafın skor etkisi
+kuyruk bileşimini değiştirmiyor.
+
+## Ön kayıtta öngörülmeyen: İKİ yerleşik açıklama birden düşüyor
+
+Ön kayıt yalnız "grafın +5'i nereden geliyor" sorusunu soruyordu. Sonuç iki kaydı birden
+değiştiriyor:
+
+**1. "Çarpan gerer, toplamsal sıkıştırır."** Bu bir sıralama açıklamasıydı. Gerçek sebep:
+`contrib["GRAF-TOPLAMSAL"]` `multipliers`'a **hiç girmiyor**, `corroborated()` ise yalnız
+`multipliers`'a bakıyor. Toplamsal terim kapıyı **açamaz**. Germe/sıkıştırma ile ilgisi yok.
+
+**2. "Graf r4.2'ye aşırı uydu" (`docs/r62-graf-tek-basina.md`).** Sonuç hâlâ doğru ama teşhis
+değişiyor: graf r4.2'de bir kapı açıyordu, r6.2'de o kapı zaten engel değildi. Bu bir **çıkarım**,
+r6.2'de ölçülmedi — doğrulaması için r6.2'de kapı varyantı koşulmalı ve r6.2 yanmış veri olduğu
+için o koşu hiçbir şey harcamıyor.
+
+## Yapılmayanlar
+
+- **Varsayılan değişmedi.** Mekanizma anlaşıldı ama r6.2'de başarısız olan şeyin tam da "kapıyı
+  açmak" olduğu ölçüldü; kapıyı doğrudan gevşetmenin orada farklı davranacağına inanmak için
+  sebep yok.
+- **`corroborated()` değiştirilmedi.** Doğru düzeltme kapıyı kaldırmak değil, "tek güçlü sinyal"
+  koşullarını tek-günlük-tek-kural desenlerini kapsayacak şekilde genişletmek. Ayrı tasarım,
+  ayrı ön kayıt.
