@@ -11,7 +11,8 @@ import pytest
 
 from ztp.freeze import REPO, build_manifest, diff_manifest, file_sha256
 
-MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v11.json"
+MANIFEST = REPO / "configs" / "freeze" / "kurallar-donduruldu-v12.json"
+V11 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v11.json"
 V10 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v10.json"
 V9 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v9.json"
 V8 = REPO / "configs" / "freeze" / "kurallar-donduruldu-v8.json"
@@ -31,7 +32,7 @@ def test_rules_match_frozen_manifest():
 def test_manifest_covers_all_rules():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert len(m["degerler"]["kurallar"]) == 25  # v8/v9/v10 kural EKLEMEZ: v7'nin 25 kuralı aynı
-    assert m["etiket"] == "kurallar-donduruldu-v11"
+    assert m["etiket"] == "kurallar-donduruldu-v12"
 
 
 def test_v3_kurallari_v2_ile_ayni():
@@ -257,7 +258,7 @@ def test_v11_butce_devretme_varsayilanda_kapali():
     """
     from ztp.config import TenantConfig
 
-    v10, v11 = (json.loads(p.read_text(encoding="utf-8")) for p in (V10, MANIFEST))
+    v10, v11 = (json.loads(p.read_text(encoding="utf-8")) for p in (V10, V11))
     assert v10["degerler"]["kurallar"] == v11["degerler"]["kurallar"]
     degisen = {f for f in v10["dosyalar"] if v11["dosyalar"].get(f) != v10["dosyalar"][f]}
     assert degisen == {"src/ztp/config.py", "src/ztp/scoring.py"}
@@ -297,3 +298,59 @@ def test_v11_devretme_kapasite_YARATMAZ(tmp_path):
     }
     kuyruk = sc.select_queue(gun + pd.Timedelta(days=2), yogun)
     assert len(kuyruk) == 6, f"günlük tavan bütçe+tavan = 6 olmalı, alınan {len(kuyruk)}"
+
+
+def test_v12_tek_seferlik_kanit_varsayilanda_kapali():
+    """v12, kanıt kapısının MANTIKSAL bir çelişkisini düzeltir; kural/eşik/ağırlık değişmedi.
+
+    Kapının 6. koşulu "3+ farklı günde tekrar" istiyor. `usb_ilk_kez` tanımı gereği kullanıcı
+    başına BİR KEZ doğru olabilir (`profile.py`: geçmiş toplamı sıfır şartı). Tetiklenmesi
+    tekrarlanamayan bir kuraldan tekrar istemek çelişkidir ve r4.2'de 5 insider'ı bloke ettiği
+    ÖLÇÜLDÜ (`docs/graf-kapi-sonuclar.md`).
+
+    Varsayılan kapalı: r6.2'de kapıya bağlı kaçan insider YOK, dolayısıyla ikinci veri setiyle
+    doğrulanamıyor (`docs/r62-kapi-on-kayit.md`).
+    """
+    from ztp.config import TenantConfig
+    from ztp.scoring import TEK_SEFERLIK_SINYAL
+
+    v11, v12 = (json.loads(p.read_text(encoding="utf-8")) for p in (V11, MANIFEST))
+    assert v11["degerler"]["kurallar"] == v12["degerler"]["kurallar"]
+    degisen = {f for f in v11["dosyalar"] if v12["dosyalar"].get(f) != v11["dosyalar"][f]}
+    assert degisen == {"src/ztp/config.py", "src/ztp/scoring.py"}
+    assert TenantConfig().tek_seferlik_kanit is False
+    assert TEK_SEFERLIK_SINYAL == frozenset({"usb_ilk_kez"})
+
+
+def test_v12_tek_seferlik_kanit_kapiyi_SADECE_tek_seferlikte_acar(tmp_path):
+    """Sözleşme: düzeltme DAR olmalı — yalnız tek-seferlik sinyal taşıyan tek tespiti geçirir.
+
+    Ön kayıt ölçütü 3: bedel, kapıyı tamamen kapatmaktan belirgin az olmalı. Düzeltme her tek
+    sinyalli vakayı geçirirse kapıyı gevşetmekten farkı kalmaz.
+    """
+    import pandas as pd
+
+    from ztp.config import TenantConfig
+    from ztp.detection.engine import Hit
+    from ztp.feedback import LabelStore
+    from ztp.graph.knowledge import KnowledgeGraph
+    from ztp.scoring import RiskResult, RiskScorer
+
+    gun = pd.Timestamp("2026-03-01")
+
+    def _hit(sinyaller):
+        return Hit("UEBA-0017", "USB", "UEBA", gun, 0.9, 7.0, [], [], sinyaller, "yayinda")
+
+    def _sonuc(sinyaller):
+        return RiskResult(
+            sid="S-1", raw=5.0, base=5.0, multipliers={}, percentile=0.5,
+            hits=[_hit(sinyaller)], contributions={},
+        )
+
+    for acik in (False, True):
+        cfg = TenantConfig(tenant_id="t", pseudonym_secret="s", tek_seferlik_kanit=acik)
+        sc = RiskScorer(cfg, KnowledgeGraph(), LabelStore(tmp_path / f"l{int(acik)}.json"))
+        # tek-seferlik sinyal YOK → her iki hâlde de kapı kapalı
+        assert sc.corroborated(_sonuc({"usb_sayisi": 4})) is False
+        # tek-seferlik sinyal VAR → yalnız bayrak açıkken geçer
+        assert sc.corroborated(_sonuc({"usb_ilk_kez": 1})) is acik

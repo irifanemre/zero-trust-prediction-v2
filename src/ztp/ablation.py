@@ -230,6 +230,12 @@ VARIANTS: Dict[str, dict] = {
     # r.multipliers.values())` koşulu var, yani graf çarpanı kapıyı tek başına açıyor olabilir.
     # İkisi birlikte açılınca kapsama 27'de kalırsa aynı 5 insider'ı kurtarıyorlar demektir
     # (`docs/graf-kapi-on-kayit.md`).
+    # Hedefli düzeltme: kapıyı tamamen kapatmak yerine yalnız tek-seferlik kanıtı kabul etmek.
+    # Beklenti (`docs/kapi-duzeltme-on-kayit.md`): aynı 5 senaryo, çok daha az vaka maliyeti.
+    "v12_tek_seferlik_kanit": dict(
+        aciklama="kapı tek-seferlik kanıtı kabul eder (usb_ilk_kez) — hedefli düzeltme",
+        cfg=dict(tek_seferlik_kanit=True),
+    ),
     "v12_graf_arti_kapi": dict(
         aciklama="graf çarpanı + kanıt kapısı birlikte — etki toplanıyor mu?",
         cfg=dict(graf_enabled=True, graf_agirligi=0.5, kuyruk_dogrulama=False),
