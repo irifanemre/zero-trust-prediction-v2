@@ -177,12 +177,6 @@ class TenantConfig:
     # Devir tavanı (0 → günlük bütçe kadar). Sınırsız devir, uzun sessizlikten sonra tek günde
     # kuyruğu patlatır; devir bir günlük ek kapasiteyle sınırlı tutulur.
     butce_devir_tavani: int = 0
-    # --- v12: kanıt doğrulama kapısı tek-seferlik kanıtı kabul eder. Kapının 6. koşulu "3+ farklı
-    # günde tekrar" istiyor; `usb_ilk_kez` gibi tanımı gereği kullanıcı başına bir kez doğru olan
-    # bir sinyalden tekrar istemek mantıksal çelişkidir. Ölçüldü: r4.2'de kaçan 12 insider'ın 5'i
-    # bu çelişki yüzünden kuyruğa girmiyor (`docs/graf-kapi-sonuclar.md`); graf çarpanının
-    # r4.2'deki +5'i de aynı kapıyı açmasından geliyordu, ilişkisel zekâdan değil.
-    tek_seferlik_kanit: bool = False
     # NOT: `available_sources` varsayılanı v10'da `email` ile tamamlandı. Öncesinde `UEBA-0023`,
     # katalogdaki 25 kuraldan varsayılan yapılandırmada "kaynak yok" diye devre dışı kalan TEK
     # kuraldı — sinyali ne kadar güçlü olursa olsun hiç değerlendirilmiyordu. CERT kör koşuları

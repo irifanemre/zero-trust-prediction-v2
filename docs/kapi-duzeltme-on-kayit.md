@@ -100,3 +100,83 @@ Kural dosyaları, eşikler, ağırlıklar **değişmeyecek**.
    fazda açılmayacak** — hangi sonuç çıkarsa çıksın.
 4. **En olası sessiz hata:** bayrak açıkken *beklenenden fazla* senaryo gelmesi. O hâlde düzeltme
    dar değil ve ölçüt 2 bunu yakalar.
+
+---
+
+# Sapmalar — ölçümden SONRA eklendi (7 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**.
+
+## ÖLÇÜT 2 TAMAMEN KALDI — düzeltme hiçbir şey yapmadı, ve KOD GERİ ALINDI
+
+| Varyant | Kapsama | Vaka | precision@N |
+|---|---|---|---|
+| `tam` | 22/34 | 1.939 | 0,045 |
+| `v12_dogrulama_kapali` | **27/34** | 2.068 | 0,045 |
+| **`v12_tek_seferlik_kanit`** | **22/34** | **1.939** | 0,045 |
+
+Hedefli düzeltme r4.2'de **birebir referansla aynı** sonucu verdi: 0 senaryo kurtardı, 0 ek vaka
+açtı. Yani kod yolu **hiç tetiklenmedi**.
+
+Sentetik veride de ölçüldü: **+0 yakalama, +5 vaka.** Orada tetikleniyor (5 ek vaka) ama hiçbir
+senaryo kurtarmıyor.
+
+> **İki veride de saf maliyet, sıfır fayda.** Kod `git revert` ile geri alındı, dondurma **v11'de
+> kaldı**. Ön kayıt ve bu sapma kaydı duruyor — öğrenilen şey kodda değil burada.
+
+## Hatanın zinciri — ve üçüncü kez aynı sınıf
+
+Ön kayıt şu önermeye dayanıyordu: *"`UEBA-0017` pratikte yalnız tek-seferlik kol üzerinden
+tetikleniyor."* Kaynağı `tests/test_esik_ulasilabilirlik.py::BILINEN` yorumu:
+
+```
+# UEBA-0017'nin iki Poisson koşulu da SENTETİK VERİDE ulaşılamaz (gözlenen en küçük p sırasıyla
+# 0,0047 ve 0,034; eşik 0,001). Kural PRATİKTE YALNIZ `usb_ilk_kez == 1` ile tetikleniyor —
+# ... Bu, r4.2'de kaçan 7 S2 senaryosunun MUHTEMEL sebebidir
+```
+
+Üç cümle, üç farklı kesinlik düzeyi:
+
+| Cümle | Dayanak |
+|---|---|
+| "sentetik veride ulaşılamaz" | **ölçülmüş**, kapsamı açık |
+| "pratikte yalnız … ile tetikleniyor" | **kapsam düşmüş** genelleme |
+| "r4.2'de kaçanların muhtemel sebebi" | açıkça **tahmin** |
+
+İkinci cümleyi okudum ve ölçülmüş bilgi gibi kullandım. Ölçüm onu çürüttü: r4.2'de o 5 insider'ın
+tetikleyen hit'lerinde `usb_ilk_kez` **yok** — yoksa düzeltme çalışırdı. Gerçek veride Poisson
+kolları **ulaşılabilir**.
+
+> Bu, bu oturumda **üçüncü kez** aynı hata sınıfı: *bir metnin ifadesini ölçüm sanmak.* Önceki
+> ikisi "BÜTÇE DIŞI" etiketinin adı ve grafın "sıralamayı germesi" açıklamasıydı. Üçü de ön kayıtlı
+> ölçütle yakalandı; ölçüt 2 tam bunun için yazılmıştı
+> (*"farklı bir küme çıkarsa düzeltme başka bir şey yapıyor demektir"*).
+
+Yorum düzeltildi: ikinci cümlenin kapsamı geri konuldu.
+
+## Ölçüt 1, 3 ve 4 geçti — ama anlamsız
+
+- Ölçüt 1 (kapalıyken birebir aynı): geçti.
+- Ölçüt 3 (bedel kapıdan az): +0 vs +129 — teknik olarak geçti, ama **sıfır fayda için sıfır
+  bedel** övünülecek bir şey değil.
+- Ölçüt 4 (precision düşmez): geçti, çünkü hiçbir şey değişmedi.
+
+Üçünün de geçmesi düzeltmenin işe yaradığını göstermiyor. **Tek anlamlı ölçüt 2'ydi ve kaldı.**
+
+## Şimdi bilinen: o 5 insider NEDEN kapıda kalıyor
+
+Elenen açıklamalar:
+
+| Açıklama | Durum |
+|---|---|
+| Bütçe yetmiyor | **yanlış** — bütçe 30→100 eğrisi düz |
+| Tespit edilemiyor | **yanlış** — `BÜTÇE DIŞI` = beklenen kural tetiklendi |
+| Tek-seferlik kanıt çelişkisi | **yanlış** — hedefli düzeltme hiç tetiklenmedi |
+
+Geriye **jenerik sebep** kalıyor: o 5 insider gerçekten *tek kural, tek gün, 0,998 yüzdeliğin
+altında, çarpansız* görünüyor — yani kapının **tam olarak elemek için var olduğu** profile sahip.
+
+> **Sonuç: dar bir düzeltme yok.** Onları geçirmenin tek yolu kapıyı **genel olarak** gevşetmek
+> (+129 vaka) ve o da iki veride doğrulanamıyor — r6.2'de kapıya bağlı kaçan insider yok.
+
+Bu, kapı dizisinin dürüst kapanışı: **sebep bulundu, çözümü yok.**

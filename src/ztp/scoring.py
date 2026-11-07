@@ -28,22 +28,6 @@ class RiskResult:
     anomali: float = 0.0  # v5: denetimsiz kanalın o günkü skoru [0, 1] (kanal kapalıysa 0)
 
 
-# v12: tanımı gereği KULLANICI BAŞINA BİR KEZ doğru olabilen sinyaller.
-#
-# `usb_ilk_kez` = `k_usb > 0 and profil_gun >= 30 and gecmis_toplam == 0` (`profile.py:425`) —
-# geçmiş toplamının sıfır olma şartı ikinci kez sağlanamaz.
-#
-# Neden gerekiyor: `corroborated()`'ın 6. koşulu "3+ farklı günde tekrar" istiyor. Tetiklenmesi
-# tanımı gereği TEKRARLANAMAYAN bir kuraldan tekrar istemek mantıksal çelişkidir. `UEBA-0017`
-# pratikte yalnız bu kol üzerinden tetikleniyor (iki Poisson kolu da ulaşılamaz —
-# `tests/test_esik_ulasilabilirlik.py::BILINEN`), dolayısıyla kapıyı asla geçemiyor ve r4.2'de
-# 5 insider bu yüzden kuyruğa girmiyor (ölçüldü: `docs/graf-kapi-sonuclar.md`).
-#
-# Küme bugün TEK ÜYELİ ve bu bir sınırdır: diğer "yeni_*" sinyalleri tekrarlanabilir (gelecek ay
-# başka bir cihaz da "yeni" olur), dolayısıyla buraya girmezler. Genelliği kanıtlanmış değil.
-TEK_SEFERLIK_SINYAL = frozenset({"usb_ilk_kez"})
-
-
 class RiskScorer:
     def __init__(self, cfg: TenantConfig, kg: KnowledgeGraph, labels: LabelStore):
         self.cfg, self.kg, self.labels = cfg, kg, labels
@@ -168,15 +152,6 @@ class RiskScorer:
             or any(v > 1 for v in r.multipliers.values())
             or len({h.rule_id for h in r.hits}) >= 2
             or len({h.day for h in r.hits}) >= self.cfg.kuyruk_tekrar_gun
-            # v12: tek-seferlik kanıt. Tekrarlanamayan bir sinyalden tekrar istemek çelişkidir.
-            or (
-                getattr(self.cfg, "tek_seferlik_kanit", False)
-                and any(
-                    float(h.sinyaller.get(ad) or 0) >= 1
-                    for h in r.hits
-                    for ad in TEK_SEFERLIK_SINYAL
-                )
-            )
         )
 
     def priority(self, r: RiskResult, signals: Dict[str, dict]) -> float:

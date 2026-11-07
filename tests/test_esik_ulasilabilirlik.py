@@ -29,10 +29,17 @@ from ztp.detection.catalog import load_catalog  # noqa: E402
 # Ölçülmüş ve BELGELENMİŞ ulaşılamaz eşikler. Her biri bilinçli olarak burada:
 # yeni bir tane eklenirse test kırılır ve gerekçesi yazılmadan geçemez.
 BILINEN = {
-    # UEBA-0017'nin iki Poisson koşulu da sentetik veride ulaşılamaz (gözlenen en küçük p sırasıyla
-    # 0,0047 ve 0,034; eşik 0,001). Kural pratikte YALNIZ `usb_ilk_kez == 1` ile tetikleniyor —
-    # yani "hayatında ilk kez USB" yakalanıyor, "kademeli artış" yakalanmıyor. Bu, r4.2'de kaçan
-    # 7 S2 senaryosunun muhtemel sebebidir (`docs/v7-ayar-taramasi.md` ve literatür haritası).
+    # UEBA-0017'nin iki Poisson koşulu SENTETİK VERİDE ulaşılamaz (gözlenen en küçük p sırasıyla
+    # 0,0047 ve 0,034; eşik 0,001). Yani SENTETİK VERİDE kural yalnız `usb_ilk_kez == 1` ile
+    # tetikleniyor: "hayatında ilk kez USB" yakalanıyor, "kademeli artış" yakalanmıyor.
+    #
+    # DİKKAT — kapsam düşürmeyin. Bu cümle eskiden "kural PRATİKTE yalnız usb_ilk_kez ile
+    # tetikleniyor" diye yazılıydı ve kapsamı belirsizdi; 7 Kasım 2026'da o genelleme ÖLÇÜMLE
+    # ÇÜRÜTÜLDÜ (`docs/kapi-duzeltme-on-kayit.md`, sapma kaydı). r4.2'de Poisson kolları
+    # ulaşılabilir ve kaçan 5 S2 senaryosunun tetikleyen hit'lerinde `usb_ilk_kez` YOK — buna
+    # dayanan hedefli bir düzeltme r4.2'de hiç tetiklenmedi ve geri alındı.
+    #
+    # Ders: "sentetik veride X" ile "pratikte X" aynı cümlede yazılmaz.
     ("UEBA-0017", "usb_poisson_p"),
     ("UEBA-0017", "usb_7g_poisson_p"),
     # ÇÖZÜLDÜ, Faz B (5 Kasım 2026) — bu satır bilerek burada DEĞİL. Eskiden şöyleydi:
