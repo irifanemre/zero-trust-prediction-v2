@@ -132,13 +132,103 @@ engelleme — hiçbiri bu kademede yok. Yalnız kapanmış vakaların sonuç ala
 
 ---
 
+## Barikat'ın altyapısı — araştırıldı, somutlaştı
+
+Kamuya açık kaynaklardan doğrulanan iki şey, talebi çok daha somut hâle getiriyor:
+
+| Bulgu | Kaynak |
+|---|---|
+| **Barikat'ın teknoloji listesinde UEBA / davranış analitiği / içeriden tehdit YOK** (38 kategori listeli: DLP, e-posta güvenliği, URL filtreleme, honeypot, SIEM, SOAR…) | [barikat.com.tr — SOC hizmetleri](https://www.barikat.com.tr/en/services/cyber-security-operation-center) |
+| **MDR hizmeti Microsoft Azure Sentinel üzerinde çalışıyor**; Barikat SOC'u içinde MS Sentinel SIEM & SOAR hizmetleri sunuluyor | [Azure Marketplace](https://azuremarketplace.microsoft.com/en-au/marketplace/consulting-services/barikatinternetguvenligibilisimticas1600948639670.csmrs) · [Barikat–Microsoft iş birliği](https://www.barikat.com.tr/en/news/collaboration-in-cyber-security-barikat) |
+
+İkincisi sayesinde yukarıdaki üç kademe **Sentinel diliyle** yazılabiliyor:
+
+### Kademe 0 / 1 — Sentinel tabloları
+
+| İstenen kaynak | Sentinel tablosu (tipik) |
+|---|---|
+| AD / IdP oturum | `SigninLogs`, `AADNonInteractiveUserSignInLogs`, `SecurityEvent` (4624/4625) |
+| Web proxy / SWG | `CommonSecurityLog`, `ZscalerNSS_CL` ya da kullanılan konnektörün tablosu |
+| E-posta ağ geçidi | `EmailEvents`, `OfficeActivity` |
+| Dosya sunucusu | `DeviceFileEvents`, `SecurityEvent` (4663) |
+| DLP / uç nokta | `DeviceEvents`, `DlpEvents` |
+| İK | Sentinel'de yoktur — **doğrudan İK sisteminden** CSV |
+
+Tablo adları kuruma göre değişir; **Kademe 0'ın amacı tam olarak bunu tespit etmek.**
+
+### Kademe 2 — `SecurityIncident` tablosu
+
+Bu, talebin en kolay kısmı ve Barikat tarafında **yeni bir süreç gerektirmiyor**. Sentinel
+incident'ları kapanırken `Classification` alanını zaten dolduruyor ve değerleri bizim ihtiyacımızla
+neredeyse birebir eşleşiyor:
+
+| Sentinel `Classification` | Bizdeki karşılığı |
+|---|---|
+| `TruePositive` | `gerçek_pozitif` |
+| `FalsePositive` | `yanlış_pozitif` |
+| `BenignPositive` | `yanlış_pozitif` (meşru aktivite) |
+| `Undetermined` | `belirsiz` |
+
+İstenen, tek bir KQL sorgusunun çıktısı:
+
+```kql
+SecurityIncident
+| where TimeGenerated > ago(90d) and Status == "Closed"
+| project IncidentNumber, Classification, ClassificationReason,
+          ClassificationComment, ClosedTime, Owner.assignedTo
+```
+
+Yani *"bana analist kararlarını verin"* talebi, onlar için **bir sorgu** — yeni entegrasyon, yeni
+alan, yeni iş akışı yok.
+
+### Kademe 3 — Sentinel'e incident yazma
+
+Sistemde hazır (`WebhookSink`: HMAC imzalı HTTP POST). Sentinel tarafında bir **Logic App** ya da
+`Microsoft.SecurityInsights` REST API uç noktası yeterli.
+
+---
+
+## ⚠️ Toplantıda kesin gelecek soru: "Sentinel'in UEBA'sı zaten var"
+
+Microsoft Sentinel'in yerleşik bir UEBA modülü (Entity Behavior Analytics) bulunuyor. Barikat UEBA
+**satmıyor** ama üzerinde çalıştıkları platformda bu modül **var**. Müşterilerinde açık olup
+olmadığını bilmiyoruz — **öğrenilmesi gereken ilk şey bu.**
+
+Cevap hazır ve ölçülmüş olmalı:
+
+| Sentinel UEBA | Bu sistem |
+|---|---|
+| Genel anomali skorlaması, varlık bazlı | **İçeriden tehdide özel** 25 kural, detection-as-code (YAML, sürümlenebilir, denetlenebilir) |
+| Uyarı üretir | **Analist kapasitesine göre günde N vaka** seçer — bütçe mekanizması |
+| Skor kapalı kutu | Her bileşen **ablasyonla** ayrı ölçülmüş; 18 isteğe bağlı bileşenin 18'i ölçüm sonucu kapalı |
+| — | **Gölge mod**: yeni kural müşteriye gürültü vermeden olgunlaşır |
+| — | **Kör koşu protokolü**: ön kayıt, tek koşu, sapma kaydı |
+
+Konumlandırma cümlesi: **"Sentinel UEBA'nın yerine geçmez; onun üstüne, içeriden tehdit özelinde
+bir katman."**
+
+---
+
+## Önerilen konumlandırma
+
+> **MxDR By BARİKAT hizmetinin içine, Sentinel'den besleyip Sentinel'e incident yazan bir içeriden
+> tehdit modülü.** Ayrı bir ürün olarak değil.
+
+Gerekçeler:
+
+1. **MxDR onların kendi markalı hizmeti** — farklılaşma aradıkları yer orası
+2. Portföylerinde **UEBA yok** → çakışma değil boşluk
+3. Sentinel hem girdi hem çıktı için **standart arayüz** veriyor
+4. **Honeypot / aldatma teknolojileri portföylerinde var** — sistemin 3 `HONEY-*` kuralı doğrudan oraya bağlanır
+5. Sistemin ölçülmüş gücü **sıralama** (precision@1 0,958) ve bu tam olarak bir SOC'un ihtiyacı: "bugün önce kime bak"
+
 ## Ayrıca bilmemiz gerekenler *(erişim değil, bilgi)*
 
 | Soru | Neden |
 |---|---|
-| **Barikat'ın hâlihazırda bir UEBA ürünü / vendor ortaklığı var mı?** | Varsa bu sistem onun **yanına** değil **yerine** konumlanır — en baştan bilinmeli |
-| SOC hangi SIEM üzerinde çalışıyor? | Girdi eşlemesinin maliyeti bu |
-| Vaka yönetimi neyle yapılıyor? | Kademe 3'ün bağlanacağı yer |
+| ~~Barikat'ın UEBA ürünü var mı?~~ **Araştırıldı: yok.** Ama **Sentinel'in yerleşik UEBA'sı müşterilerde AÇIK mı?** | Açıksa konumlandırma değişir |
+| ~~SOC hangi SIEM üzerinde?~~ **Araştırıldı: Microsoft Sentinel.** Hangi konnektörler bağlı? | Tablo adlarını belirler |
+| ~~Vaka yönetimi neyle?~~ **Sentinel incident.** Logic App yetkisi kimde? | Kademe 3'ün bağlanacağı yer |
 | **Analist başına günlük vaka kapasitesi kaç?** | Sistemin bütçe parametresi doğrudan bu — varsayılan 30/gün |
 | Geçmişte tespit edilmiş içeriden tehdit vakası var mı? | **Recall ölçümünün tek yolu** (en üstteki tabloya bakınız) |
 
