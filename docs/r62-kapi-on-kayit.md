@@ -69,3 +69,75 @@ kıyaslanamaz.
    senaryo sayısına bakılarak verilecek, sonuca bakılarak değil.
 4. **Hangi sonuç çıkarsa çıksın varsayılan değişmeyecek.** Bu bir teşhis koşusu; iki veri de kör
    değil.
+
+---
+
+# Sapmalar — koşum DURDURULDU (7 Kasım 2026)
+
+Ön kayıt metni yukarıda **değiştirilmedi**.
+
+## Koşu tamamlanmadan durduruldu, çünkü soru r6.2'de SORULAMIYOR
+
+Referans varyantı (`tam`) bitti ve ölçüt 1'i okurken daha temel bir şey görüldü:
+
+```
+CERT-r6.2-S2-CMP2946   KALDI (tetiklenmedi) [kısmi pencere]
+CERT-r6.2-S4-CDE1846   GEÇTİ
+```
+
+90 günlük pencerede 2 senaryo var ve kaçan tek senaryo **`KALDI (tetiklenmedi)`** — yani beklenen
+kural **hiç tetiklenmedi**.
+
+**Kanıt doğrulama kapısı yalnız `BÜTÇE DIŞI` biçimine etki eder:** "tespit tetiklendi ama kuyruğa
+girmedi". Hiç tetiklenmemiş bir tespit için kapının yapacağı bir şey yoktur — **var olmayan bir
+uyarıyı kuyruğa alamazsınız.**
+
+Dolayısıyla bu pencere, kapı hipotezini ne doğrular ne çürütür. Pencereyi büyütmek de çözmez:
+
+## Kayıtlı r6.2 kör koşusunda hiç `BÜTÇE DIŞI` YOK
+
+`docs/r62-graf-tek-basina.md`, 360 günlük dört pencere:
+
+```
+S1 ✔   S3 ✔   S4 ✔   S5 ✘   S2 ölçülemedi
+```
+
+Tek kaçan S5 ve sebebi **ölçülmüş durumda**: `UEBA-0003` r6.2'de yapısal olarak ölü — web
+`bytes_out` her olayda sıfır, çünkü `cert.py` `http.csv`'den `content` okumuyor (4.2 etik sınır;
+`docs/faz-a3-sonuclar.md`).
+
+> **r6.2'nin kaçırdığı insider, kapının YUKARI tarafında kaçıyor.** Tespit üretilmiyor; kapı
+> üretilmiş tespitleri filtreliyor. İkisi farklı katman.
+
+## Sonuç: çıkarım DOĞRULANDI, ama koşuyla değil kayıtla
+
+Sınanmak istenen çıkarım şuydu: *"graf r6.2'de +0 verdi çünkü orada açacak kapı yoktu."*
+
+Kayıtlı ölçümler bunu daha güçlü biçimde söylüyor: r6.2'de **açılacak kapı yok, çünkü kapıya gelen
+tespit yok.** Ne graf, ne kapı, ne sıralama değişikliği, ne bütçe — tespit üretilmediği sürece
+hiçbiri S5'e ulaşamaz.
+
+**Bu bir ölçüm değil, kayıtlı ölçümlerden çıkarılan bir sonuç.** Ama argüman neredeyse totolojik:
+var olmayan bir tespit kuyruğa alınamaz. Yeni bir koşu bunu değiştirmezdi; 4,5 saatlik koşu **+0**
+verip aynı yere çıkacaktı — ve "+0" rakamı yanıltıcı olurdu, çünkü "kapı işe yaramadı" gibi
+okunurdu. Oysa doğru cümle: **kapı bu veride sınanamaz.**
+
+## Önemli sonuç: kapı düzeltmesi r6.2 ile DOĞRULANAMAZ
+
+Projenin kuralı bir bileşenin varsayılan açılması için **iki farklı veride** değer üretmesini
+istiyor. Kapı için:
+
+| Veri | Kapıya bağlı kaçan insider | Kapı sınanabilir mi |
+|---|---|---|
+| r4.2 | **5** (`BÜTÇE DIŞI`) | ✅ ölçüldü, +5 |
+| r6.2 | **0** | ❌ sınanamaz |
+| r1 | bilinmiyor | **tek kalan ihtimal** |
+
+Yani kapı düzeltmesinin ikinci veri setini **yalnız r1 verebilir** — ve ancak r1'de
+`BÜTÇE DIŞI` biçiminde kaçan insider varsa. Bu, r1'i harcama kararını doğrudan etkiliyor ve
+`docs/acik-bulgular.md`'ye işlendi.
+
+## Harcanan
+
+Referans varyantı 87 dakika hesap tüketti ve sonucu kayda geçti (`tam`: 1/2 kapsama, 2.176 vaka).
+İkinci ve üçüncü varyant koşmadı. **Hiçbir kör veri harcanmadı** — r6.2 zaten yanmış durumdaydı.
